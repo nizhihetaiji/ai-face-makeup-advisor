@@ -1,0 +1,2161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 妆容推荐 · 双引擎面容诊断</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #faf9f7; color: #2c2c2a; line-height: 1.6;
+    min-height: 100vh; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 20px 80px; }
+
+  header { text-align: center; margin-bottom: 36px; }
+  header h1 { font-size: 26px; font-weight: 600; color: #3c3489; margin-bottom: 8px; }
+  header p { font-size: 14px; color: #888780; max-width: 600px; margin: 0 auto; }
+  .privacy { display: inline-block; margin-top: 12px; font-size: 12px; color: #0f6e56; background: #e1f5ee; padding: 4px 12px; border-radius: 999px; }
+
+  .panel {
+    background: #fff; border-radius: 16px; border: 1px solid rgba(0,0,0,0.06);
+    padding: 28px; margin-bottom: 24px;
+  }
+  .panel h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #3c3489; display: flex; align-items: center; gap: 8px; }
+  .panel h2 .step { background: #534ab7; color: #fff; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; }
+
+  .settings-bar {
+    background: #f8f7f4; border-radius: 12px; padding: 16px 20px;
+    margin-bottom: 24px; border: 1px solid rgba(0,0,0,0.06);
+  }
+  .settings-bar .label { font-size: 13px; color: #5f5e5a; margin-bottom: 8px; }
+  .settings-bar input {
+    width: 100%; max-width: 500px; padding: 10px 14px; border: 1px solid #d3d1c7;
+    border-radius: 8px; font-size: 14px; background: #fff; color: #2c2c2a;
+  }
+  .settings-bar input:focus { outline: none; border-color: #534ab7; }
+  .settings-bar .row { display: flex; align-items: center; gap: 12px; }
+  .settings-bar .save-btn {
+    padding: 8px 20px; background: #534ab7; color: #fff; border: none;
+    border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 500;
+  }
+  .settings-bar .save-btn:hover { background: #4339a0; }
+  .settings-bar .status-text { font-size: 12px; color: #888780; margin-left: 8px; }
+  .settings-bar .toggle {
+    font-size: 12px; color: #534ab7; cursor: pointer; text-decoration: none;
+    margin-top: 6px; display: inline-block;
+  }
+
+  .upload-zone {
+    border: 2px dashed #d3d1c7; border-radius: 12px; padding: 48px 24px;
+    text-align: center; cursor: pointer; transition: all 0.2s; background: #faf9f7;
+  }
+  .upload-zone:hover { border-color: #534ab7; background: #eeedfe; }
+  .upload-zone.dragover { border-color: #534ab7; background: #eeedfe; }
+  .upload-zone .icon { font-size: 36px; margin-bottom: 12px; }
+  .upload-zone p { color: #5f5e5a; font-size: 14px; }
+  .upload-zone .hint { font-size: 12px; color: #b4b2a9; margin-top: 6px; }
+  #fileInput { display: none; }
+
+  .preview-area { display: none; align-items: flex-start; gap: 24px; flex-wrap: wrap; }
+  .preview-area.active { display: flex; }
+  .canvas-wrap { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid rgba(0,0,0,0.08); background: #f5f4f0; }
+  .canvas-wrap canvas { display: block; width: 100%; max-width: 420px; height: auto; }
+
+  .status { margin-top: 16px; font-size: 13px; color: #5f5e5a; }
+  .status.loading { color: #185fa5; }
+  .status.error { color: #a32d2d; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #b5d4f4; border-top-color: #185fa5; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .reset-btn { margin-top: 16px; font-size: 13px; color: #534ab7; background: none; border: none; cursor: pointer; padding: 4px 0; }
+  .reset-btn:hover { text-decoration: underline; }
+
+  .results { display: none; }
+  .results.active { display: block; }
+
+  /* Dual engine indicator */
+  .engine-tabs {
+    display: flex; gap: 8px; margin-bottom: 16px;
+  }
+  .engine-tab {
+    padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500;
+    cursor: pointer; border: 1px solid rgba(0,0,0,0.08); background: #fff; color: #5f5e5a;
+    transition: all 0.15s;
+  }
+  .engine-tab.active-mp { background: #0f6e56; color: #fff; border-color: #0f6e56; }
+  .engine-tab.active-ai { background: #3c3489; color: #fff; border-color: #3c3489; }
+  .engine-tab.active-merge { background: #ba7517; color: #fff; border-color: #ba7517; }
+  .engine-tab:hover { opacity: 0.85; }
+
+  .overall { background: #fff; border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; border: 1px solid rgba(0,0,0,0.08); }
+  .overall h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #3c3489; }
+  .overall .summary { font-size: 13px; color: #5f5e5a; }
+
+  /* Comparison panel */
+  .compare-panel {
+    background: #f8f7f4; border-radius: 12px; padding: 16px 18px; margin-bottom: 16px;
+    border: 1px solid rgba(0,0,0,0.06);
+  }
+  .compare-panel h3 { font-size: 14px; font-weight: 600; color: #ba7517; margin-bottom: 10px; }
+  .compare-row {
+    display: flex; align-items: center; gap: 12px; padding: 8px 0;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+  }
+  .compare-row:last-child { border-bottom: none; }
+  .compare-part { font-size: 13px; font-weight: 500; width: 60px; color: #2c2c2a; }
+  .compare-mp { font-size: 12px; padding: 3px 8px; border-radius: 6px; background: rgba(15,110,86,0.08); color: #0f6e56; border: 1px solid rgba(15,110,86,0.2); }
+  .compare-ai { font-size: 12px; padding: 3px 8px; border-radius: 6px; background: rgba(83,74,183,0.08); color: #3c3489; border: 1px solid rgba(83,74,183,0.2); }
+  .compare-match { font-size: 11px; color: #0f6e56; }
+  .compare-diff { font-size: 11px; color: #d4537e; }
+
+  /* DeepSeek enhancement section */
+  .ai-enhance {
+    background: linear-gradient(135deg, #f0eeff, #e8e4ff); border-radius: 12px;
+    padding: 18px 20px; margin-bottom: 16px; border: 1px solid rgba(83,74,183,0.15);
+  }
+  .ai-enhance h3 { font-size: 14px; font-weight: 600; color: #3c3489; margin-bottom: 6px; }
+  .ai-enhance p { font-size: 12px; color: #888780; margin-bottom: 12px; }
+  .ai-enhance-btn {
+    padding: 10px 24px; background: #3c3489; color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: 500;
+    transition: all 0.15s;
+  }
+  .ai-enhance-btn:hover { background: #2d2770; }
+  .ai-enhance-btn:disabled { background: #b4b2a9; cursor: not-allowed; }
+  .ai-enhance-btn.loading { background: #5f5e5a; }
+
+  .ai-result {
+    background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 16px;
+    border: 2px solid #3c3489; position: relative;
+  }
+  .ai-result::before {
+    content: "DeepSeek AI"; position: absolute; top: -10px; left: 16px;
+    background: #3c3489; color: #fff; font-size: 11px; font-weight: 600;
+    padding: 3px 10px; border-radius: 6px; letter-spacing: 0.5px;
+  }
+  .ai-result h4 { font-size: 15px; font-weight: 600; color: #3c3489; margin-bottom: 10px; margin-top: 4px; }
+  .ai-result .ai-summary { font-size: 14px; color: #2c2c2a; line-height: 1.7; margin-bottom: 12px; }
+  .ai-result .ai-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .ai-result .ai-tag {
+    background: rgba(83,74,183,0.08); border: 1px solid rgba(83,74,183,0.2);
+    border-radius: 6px; padding: 4px 12px; font-size: 12px; color: #3c3489; font-weight: 500;
+  }
+  .ai-result .ai-tips { font-size: 13px; color: #5f5e5a; line-height: 1.6; }
+  .ai-cost { font-size: 11px; color: #aaa; margin-top: 6px; }
+
+  /* MediaPipe result badge */
+  .mp-result {
+    background: #fff; border-radius: 12px; padding: 16px 18px; margin-bottom: 16px;
+    border: 2px solid #0f6e56; position: relative;
+  }
+  .mp-result::before {
+    content: "MediaPipe 468点"; position: absolute; top: -10px; left: 16px;
+    background: #0f6e56; color: #fff; font-size: 11px; font-weight: 600;
+    padding: 3px 10px; border-radius: 6px; letter-spacing: 0.5px;
+  }
+
+  .note { font-size: 11px; color: #888780; margin-top: 8px; line-height: 1.5; }
+
+  /* Real-time search indicator */
+  .realtime-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(15,110,86,0.08); border: 1px solid rgba(15,110,86,0.2);
+    border-radius: 6px; padding: 3px 10px; font-size: 11px; color: #0f6e56; font-weight: 500;
+    margin-bottom: 12px;
+  }
+  .realtime-badge .pulse { width: 8px; height: 8px; background: #0f6e56; border-radius: 50%; animation: pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .search-loading { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #185fa5; padding: 12px 0; }
+  .search-loading .spinner { width: 18px; height: 18px; }
+  .fallback-badge {
+    background: rgba(178,178,170,0.1); border: 1px solid rgba(178,178,170,0.3);
+    border-radius: 6px; padding: 3px 10px; font-size: 11px; color: #888780; font-weight: 500;
+  }
+  .bili-thumb-img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; }
+
+  /* Part section */
+  .part-section { margin-bottom: 28px; }
+  .part-header {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 16px; font-weight: 600; margin-bottom: 14px;
+    padding-left: 12px; position: relative;
+  }
+  .part-header::before { content: ""; position: absolute; left: 0; top: 4px; bottom: 4px; width: 3px; border-radius: 2px; }
+  .part-section.brow .part-header::before { background: #7f77dd; }
+  .part-section.eye .part-header::before { background: #378add; }
+  .part-section.nose .part-header::before { background: #1d9e75; }
+  .part-section.lip .part-header::before { background: #d4537e; }
+  .part-section.face .part-header::before { background: #ba7517; }
+  .part-section.brow .part-header { color: #5f4fbb; }
+  .part-section.eye .part-header { color: #2a6fb5; }
+  .part-section.nose .part-header { color: #18745a; }
+  .part-section.lip .part-header { color: #b5436a; }
+  .part-section.face .part-header { color: #8a5a10; }
+
+  .traits { font-size: 13px; color: #5f5e5a; margin-bottom: 12px; }
+  .traits .tag { display: inline-block; background: rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.08); border-radius: 6px; padding: 3px 10px; margin: 2px 4px 2px 0; font-size: 12px; }
+  .traits .mp-tag { background: rgba(15,110,86,0.08); border: 1px solid rgba(15,110,86,0.2); color: #0f6e56; font-weight: 500; }
+  .traits .ai-tag { background: rgba(83,74,183,0.1); border: 1px solid rgba(83,74,183,0.25); color: #3c3489; font-weight: 500; }
+
+  .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+  .video-card {
+    border-radius: 12px; border: 1px solid rgba(0,0,0,0.08);
+    background: #fff; overflow: hidden; transition: all 0.2s;
+  }
+  .video-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); transform: translateY(-2px); }
+  .video-thumb {
+    position: relative; height: 160px; overflow: hidden;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+  .video-thumb.bili { background: linear-gradient(135deg, #f4fbff 0%, #e0f0ff 50%, #c8e4ff 100%); }
+  .video-thumb.douyin { background: linear-gradient(135deg, #fff0f0 0%, #fce4e8 50%, #f8cdd5 100%); }
+  .video-thumb.xhs { background: linear-gradient(135deg, #fff0f3 0%, #ffd6de 50%, #ffb3c8 100%); }
+  .video-thumb .thumb-icon { font-size: 48px; opacity: 0.3; }
+  .video-thumb .thumb-icon.bili-icon { color: #0c447c; }
+  .video-thumb .thumb-icon.douyin-icon { color: #993556; }
+  .video-thumb .thumb-icon.xhs-icon { color: #c81e4f; }
+  .video-thumb-img {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; z-index: 1; display: block;
+  }
+  .video-thumb .platform-badge,
+  .video-thumb .play-count,
+  .video-thumb .thumb-icon { z-index: 2; }
+  .video-thumb.img-error .thumb-icon { display: block; }
+  .platform-badge { position: absolute; top: 8px; left: 8px; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px; }
+  .platform-badge.bili { background: #0c447c; color: #fff; }
+  .platform-badge.douyin { background: #222; color: #fff; }
+  .platform-badge.xhs { background: #c81e4f; color: #fff; }
+  .play-count { position: absolute; bottom: 8px; right: 8px; font-size: 11px; color: #fff; background: rgba(0,0,0,0.55); padding: 2px 8px; border-radius: 4px; }
+
+  .video-info { padding: 12px 14px; }
+  .video-title { font-size: 14px; font-weight: 500; color: #2c2c2a; margin-bottom: 6px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .video-author { font-size: 12px; color: #888780; margin-bottom: 10px; }
+  .video-actions { display: flex; gap: 8px; }
+  .video-actions button, .video-actions a {
+    flex: 1; text-align: center; font-size: 13px; padding: 8px 0; border-radius: 8px;
+    border: none; cursor: pointer; transition: all 0.15s; text-decoration: none;
+    display: inline-block; font-weight: 500;
+  }
+  .btn-play { background: #0c447c; color: #fff; }
+  .btn-play:hover { background: #0a3a68; }
+  .btn-visit { background: #e8e7e3; color: #2c2c2a; }
+  .btn-visit:hover { background: #dddcd8; }
+
+  .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+  .modal-overlay.active { display: flex; }
+  .modal-box { background: #fff; border-radius: 16px; max-width: 800px; width: 92%; max-height: 90vh; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+  .modal-header { padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(0,0,0,0.08); }
+  .modal-header h3 { font-size: 15px; font-weight: 600; color: #2c2c2a; flex: 1; }
+  .modal-close { width: 32px; height: 32px; border-radius: 50%; background: #f5f5f5; border: none; cursor: pointer; font-size: 18px; color: #666; display: flex; align-items: center; justify-content: center; }
+  .modal-close:hover { background: #eee; }
+  .modal-body { padding: 0; position: relative; }
+  .modal-body iframe { width: 100%; height: 450px; border: none; display: block; }
+  .modal-body .iframe-fallback { display: none; padding: 60px 20px; text-align: center; }
+  .iframe-fallback p { font-size: 14px; color: #5f5e5a; margin-bottom: 16px; }
+  .iframe-fallback a { display: inline-block; padding: 10px 24px; background: #0c447c; color: #fff; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 500; }
+  .modal-info { padding: 16px 20px; border-top: 1px solid rgba(0,0,0,0.06); }
+  .modal-info .m-title { font-size: 14px; font-weight: 500; color: #2c2c2a; }
+  .modal-info .m-author { font-size: 12px; color: #888780; margin-top: 4px; }
+
+  .blogger-card { border-radius: 12px; border: 1px solid rgba(0,0,0,0.08); background: #fff; padding: 16px; display: flex; gap: 14px; align-items: center; transition: all 0.2s; }
+  .blogger-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+  .blogger-avatar { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; }
+  .blogger-avatar.douyin { background: #fce4e8; color: #993556; }
+  .blogger-avatar.xhs { background: #ffd6de; color: #c81e4f; }
+  .blogger-detail { flex: 1; }
+  .blogger-name { font-size: 14px; font-weight: 600; color: #2c2c2a; }
+  .blogger-desc { font-size: 12px; color: #888780; margin-top: 2px; }
+  .blogger-followers { font-size: 11px; color: #aaa; margin-top: 2px; }
+  .blogger-link { font-size: 13px; padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; text-decoration: none; display: inline-block; font-weight: 500; }
+  .blogger-link.douyin { background: #222; color: #fff; }
+  .blogger-link.xhs { background: #c81e4f; color: #fff; }
+
+  .more-link { display: block; text-align: center; font-size: 13px; color: #534ab7; padding: 10px; margin-top: 12px; border: 1px dashed rgba(83,74,183,0.3); border-radius: 8px; text-decoration: none; cursor: pointer; }
+  .more-link:hover { background: #eeedfe; border-color: #534ab7; }
+
+  footer { text-align: center; margin-top: 40px; font-size: 12px; color: #b4b2a9; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>AI 妆容推荐 · 双引擎诊断</h1>
+    <p>上传正脸照片，MediaPipe 468点精准分析面容特征（含3D深度），可选 DeepSeek AI 增强获得更细腻的面容理解。两套结果融合，推荐更精准。</p>
+    <span class="privacy">MediaPipe 本地分析不上传服务器 · DeepSeek 增强需上传照片至 DeepSeek API</span>
+  </header>
+
+  <!-- Settings -->
+  <div class="settings-bar" id="settingsBar">
+    <div class="label">DeepSeek API Key（可选，填入后可使用 AI 增强分析）</div>
+    <div class="row">
+      <input type="password" id="apiKeyInput" placeholder="sk-..." autocomplete="off">
+      <button class="save-btn" data-action="save-key">保存</button>
+      <span class="status-text" id="keyStatus"></span>
+    </div>
+    <a class="toggle" data-action="toggle-key-visibility">显示/隐藏 Key</a>
+  </div>
+
+  <div class="panel">
+    <h2><span class="step">1</span> 上传正脸照片</h2>
+    <div class="upload-zone" id="uploadZone">
+      <div class="icon">+</div>
+      <p>点击或拖拽照片到这里</p>
+      <div class="hint">建议正脸、光线充足、无遮挡的自拍，JPG/PNG 均可</div>
+    </div>
+    <input type="file" id="fileInput" accept="image/*">
+    <div class="preview-area" id="previewArea">
+      <div class="canvas-wrap">
+        <canvas id="meshCanvas"></canvas>
+      </div>
+      <div>
+        <div class="status" id="status"></div>
+        <button class="reset-btn" data-action="reset">换一张照片</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="results" id="results">
+    <div class="panel">
+      <h2><span class="step">2</span> 面容分析 & 视频推荐</h2>
+
+      <!-- Engine tabs -->
+      <div class="engine-tabs" id="engineTabs">
+        <button class="engine-tab active-mp" data-action="switch-engine" data-engine="mp">MediaPipe 468点</button>
+        <button class="engine-tab" data-action="switch-engine" data-engine="ai">DeepSeek AI</button>
+        <button class="engine-tab" data-action="switch-engine" data-engine="merge">融合结果</button>
+      </div>
+
+      <div class="overall" id="overallBox"></div>
+
+      <!-- MediaPipe detailed result -->
+      <div id="mpResultBox" style="display:none;"></div>
+
+      <!-- DeepSeek enhance section -->
+      <div class="ai-enhance" id="aiEnhanceBox">
+        <h3>DeepSeek AI 增强分析</h3>
+        <p>DeepSeek AI 增强基于 MediaPipe 468点精确测量数据（面部长宽比、下颌角、3D鼻梁深度、眼睑平坦度等）进行专业解读，比单纯看照片更客观精准。AI会确认或修正分类、给出针对性化妆策略、判断骨骼结构特征。每次约消耗0.01元API额度。</p>
+        <button class="ai-enhance-btn" id="aiEnhanceBtn" data-action="ai-enhance">请先填写 API Key</button>
+        <div class="ai-cost" id="aiCostInfo"></div>
+      </div>
+
+      <!-- DeepSeek AI result -->
+      <div id="aiResultBox" style="display:none;"></div>
+
+      <!-- Comparison panel -->
+      <div id="comparePanel" style="display:none;"></div>
+
+      <p class="note">MediaPipe 分析基于468个面部关键点+3D深度，精度远高于传统68点方案。B站视频可直接播放，抖音/小红书博主点击跳转查看。</p>
+      <div id="resultsContent" style="margin-top:16px;"></div>
+    </div>
+  </div>
+
+  <footer>MVP 原型 · MediaPipe Face Mesh 468点（本地）+ DeepSeek V4（可选增强）· 视频来源于公开平台</footer>
+</div>
+
+<!-- Video playback modal -->
+<div class="modal-overlay" id="videoModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="modalTitle">正在播放</h3>
+      <button class="modal-close" id="modalClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <iframe id="modalPlayer" allowfullscreen allow="autoplay; fullscreen"></iframe>
+      <div class="iframe-fallback" id="iframeFallback">
+        <p>视频无法在此嵌入播放，请在B站打开观看：</p>
+        <a id="fallbackLink" href="#">在B站打开此视频</a>
+      </div>
+    </div>
+    <div class="modal-info">
+      <div class="m-title" id="modalVideoTitle"></div>
+      <div class="m-author" id="modalVideoAuthor"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3/drawing_utils.js" crossorigin="anonymous"></script>
+<script>
+const $ = id => document.getElementById(id);
+
+let currentImageBase64 = '';
+let mpAnalysisResult = null;   // MediaPipe local analysis result
+let aiAnalysisResult = null;   // DeepSeek AI analysis result
+let currentEngine = 'mp';      // current display engine: mp, ai, merge
+let faceMeshInstance = null;
+let faceMeshReady = false;      // Track initialization completion
+let faceMeshInitPromise = null; // Promise to await initialization
+
+// ====== Helper functions ======
+function openLink(url) {
+  const w = window.open(url, '_blank');
+  if (!w || w.closed) window.location.href = url;
+}
+
+function getApiKey() { return localStorage.getItem('deepseek_api_key') || ''; }
+function saveApiKey(key) {
+  localStorage.setItem('deepseek_api_key', key);
+  $('keyStatus').textContent = key ? '已保存' : '已清除';
+  setTimeout(() => $('keyStatus').textContent = '', 2000);
+  updateEnhanceButton();
+}
+function updateEnhanceButton() {
+  const btn = $('aiEnhanceBtn');
+  const key = getApiKey();
+  if (!key) { btn.disabled = true; btn.textContent = '请先填写 API Key'; }
+  else if (aiAnalysisResult) { btn.disabled = true; btn.textContent = 'AI 分析已完成'; }
+  else { btn.disabled = false; btn.textContent = '启动 AI 增强分析'; }
+}
+
+// Load saved key on init
+(function() {
+  const saved = getApiKey();
+  if (saved) $('apiKeyInput').value = saved;
+  updateEnhanceButton();
+})();
+
+function setStatus(msg, type) {
+  const el = $('status');
+  el.className = 'status' + (type ? ' ' + type : '');
+  el.innerHTML = (type === 'loading' ? '<span class="spinner"></span>' : '') + msg;
+}
+
+// ====== Video Database (大幅扩充，每个分类独立内容，不重复) ======
+const VIDEO_DB = {
+  face: {
+    round: [
+      { platform: 'bili', bvid: 'BV12x411u76b', title: '9个修容神技！圆脸必看！', author: '易烫YCC', plays: '141.9万' },
+      { platform: 'bili', bvid: 'BV1nkKG69EdD', title: '求求了！脸越肉越不要画修容！！', author: '淏淏超级了不起', plays: '热门' },
+      { platform: 'douyin', name: '汤布里布', desc: '圆脸新手修容大法，秒变小V脸', followers: '90万', searchKeyword: '汤布里布 圆脸修容' },
+      { platform: 'douyin', name: '凑凑耶', desc: '方圆脸腮红捏骨法！扁平脸秒变精致小脸', followers: '10万', searchKeyword: '凑凑耶 圆脸腮红修容' },
+      { platform: 'douyin', name: '大鱼小七', desc: '猫猫妆清透感拉满！圆脸修容思路', followers: '30万', searchKeyword: '大鱼小七 圆脸修容' },
+    ],
+    round_square: [
+      { platform: 'bili', bvid: 'BV1Qg41177x7', title: '大方脸修容效果真的更好！', author: '弄弄这个妆', plays: '热门' },
+      { platform: 'douyin', name: '凑凑耶', desc: '方圆脸腮红捏骨法！扁平脸秒变精致小脸', followers: '10万', searchKeyword: '凑凑耶 方圆脸修容' },
+      { platform: 'douyin', name: '喊喊小刘', desc: '方圆脸美进现实的妆容思路', followers: '17万', searchKeyword: '喊喊小刘 方圆脸修容' },
+    ],
+    round_heart: [
+      { platform: 'bili', bvid: 'BV12x411u76b', title: '圆脸修容+下巴收窄技巧', author: '易烫YCC', plays: '热门' },
+      { platform: 'douyin', name: '不吃白米饭', desc: '圆脸下巴尖修饰+日常修容思路', followers: '热门', searchKeyword: '圆脸下巴修饰修容' },
+    ],
+    square: [
+      { platform: 'bili', bvid: 'BV1Qg41177x7', title: '大方脸修容效果真的更好！', author: '弄弄这个妆', plays: '热门' },
+      { platform: 'bili', bvid: 'BV1RM4m167GM', title: '修容大胆点，方脸包上镜的！', author: '陈圆圆超可爱', plays: '热门' },
+      { platform: 'douyin', name: 'CarlaZ', desc: '真正适合方脸的修容2.0，一秒变小V脸', followers: '16万', searchKeyword: 'CarlaZ 方脸修容' },
+      { platform: 'douyin', name: '卷毛妈妈', desc: '方圆脸正确修容3步法', followers: '9万', searchKeyword: '卷毛妈妈 方圆脸修容' },
+      { platform: 'douyin', name: '喊喊小刘', desc: '方圆脸美进现实的妆容思路', followers: '17万', searchKeyword: '喊喊小刘 方圆脸修容' },
+    ],
+    oval_square: [
+      { platform: 'bili', bvid: 'BV1RM4m167GM', title: '鹅蛋偏方脸修容，柔和下颌线', author: '陈圆圆超可爱', plays: '热门' },
+      { platform: 'douyin', name: '卷毛妈妈', desc: '方圆脸正确修容3步法', followers: '9万', searchKeyword: '卷毛妈妈 方圆脸修容' },
+    ],
+    oval: [
+      { platform: 'bili', bvid: 'BV1p7421f7by', title: '修容铁皮大户来分享修容啦！', author: '潘阿七', plays: '热门' },
+      { platform: 'bili', bvid: 'BV1RM4m167GM', title: '修容大胆点，鹅蛋脸也立体！', author: '陈圆圆超可爱', plays: '热门' },
+      { platform: 'douyin', name: '程十安', desc: '鹅蛋脸新手修容万能公式', followers: '百万级', searchKeyword: '程十安 修容教程' },
+      { platform: 'xhs', name: '七七化妆记', desc: '鹅蛋脸高级感立体妆思路', followers: '热门', searchKeyword: '鹅蛋脸高级感立体妆' },
+    ],
+    oval_heart: [
+      { platform: 'bili', bvid: 'BV1p7421f7by', title: '鹅蛋脸下巴尖修饰修容思路', author: '潘阿七', plays: '热门' },
+      { platform: 'douyin', name: '不吃白米饭', desc: '心形脸下巴尖修饰+塌鼻韩系妆', followers: '热门', searchKeyword: '心形脸下巴修饰修容' },
+    ],
+    long: [
+      { platform: 'bili', bvid: 'BV1NFL668EXV', title: '上镜骨相脸修容高光', author: '仟QIANQIAN', plays: '热门' },
+      { platform: 'bili', bvid: 'BV1nkKG69EdD', title: '长脸缩短中庭修容法！', author: '淏淏超级了不起', plays: '热门' },
+      { platform: 'douyin', name: '小红化妆师', desc: '长脸缩短中庭修容法', followers: '热门', searchKeyword: '长脸修容缩短中庭' },
+      { platform: 'xhs', name: '化妆师宁宁', desc: '长脸横向截断修容，三庭比例调整', followers: '热门', searchKeyword: '长脸横向修容缩短中庭' },
+    ],
+    long_square: [
+      { platform: 'bili', bvid: 'BV1NFL668EXV', title: '偏长方脸修容，缩短中庭+柔和下颌', author: '仟QIANQIAN', plays: '热门' },
+      { platform: 'douyin', name: '小红化妆师', desc: '长脸修容缩短中庭+方脸柔和下颌线', followers: '热门', searchKeyword: '长方脸修容缩短中庭' },
+    ],
+    heart: [
+      { platform: 'bili', bvid: 'BV1Qg41177x7', title: '下巴尖修饰修容思路', author: '弄弄这个妆', plays: '热门' },
+      { platform: 'bili', bvid: 'BV1RM4m167GM', title: '心形脸颧骨修饰修容', author: '陈圆圆超可爱', plays: '热门' },
+      { platform: 'douyin', name: '不吃白米饭', desc: '心形脸下巴尖修饰+塌鼻韩系妆', followers: '热门', searchKeyword: '心形脸下巴修饰修容' },
+      { platform: 'xhs', name: '云朵妆记', desc: '心形脸额头宽颧骨修容缩小法', followers: '热门', searchKeyword: '心形脸额头宽修容' },
+    ],
+  },
+  brow: {
+    arched: [
+      { platform: 'bili', bvid: 'BV1wZ4y1a7aD', title: '画对眉毛=改善脸型！弯拱眉版', author: '茸仔', plays: '27.9万' },
+      { platform: 'douyin', name: '程十安', desc: '弯拱眉怎么画不显凶，柔和弯眉教程', followers: '百万级', searchKeyword: '程十安 弯拱眉画法' },
+      { platform: 'xhs', name: '猫抖抖', desc: '弯拱眉自然画法，不显凶技巧', followers: '热门', searchKeyword: '弯拱眉画法 不显凶' },
+      { platform: 'douyin', name: '李砍刀', desc: '弯拱眉搭配眼线画法完整教程', followers: '30万', searchKeyword: '李砍刀 弯拱眉眼线画法' },
+    ],
+    flat: [
+      { platform: 'bili', bvid: 'BV19j411d7wh', title: '全新鼻影思路（含平直眉搭配）', author: '茸仔', plays: '93.8万' },
+      { platform: 'douyin', name: '东东化妆师', desc: '平直眉韩系画法，新手也能画', followers: '热门', searchKeyword: '平直眉画法 韩系眉毛' },
+      { platform: 'douyin', name: '凑凑耶', desc: '方圆脸平直眉画法，缩短中庭', followers: '10万', searchKeyword: '凑凑耶 平直眉方圆脸' },
+      { platform: 'xhs', name: '小鱼同学', desc: '平直眉自然画法，适合日常妆', followers: '热门', searchKeyword: '平直眉自然画法' },
+    ],
+    normal: [
+      { platform: 'bili', bvid: 'BV1wZ4y1a7aD', title: '画对眉毛=改善脸型！标准眉版', author: '茸仔', plays: '27.9万' },
+      { platform: 'douyin', name: '程十安', desc: '标准眉形新手万能画法', followers: '百万级', searchKeyword: '程十安 标准眉形画法' },
+      { platform: 'xhs', name: '七七化妆记', desc: '标准眉万能画法，新手5分钟搞定', followers: '热门', searchKeyword: '标准眉形新手画法' },
+    ],
+  },
+  eye: {
+    narrow: [
+      { platform: 'bili', bvid: 'BV1WW411n7u9', title: '能让单眼皮放大3倍的眼妆！', author: '吴琼琼爱画画', plays: '109.4万' },
+      { platform: 'bili', bvid: 'BV1wq4y157Qr', title: '无双眼皮贴！单眼皮小眼化妆公式', author: '__木木夕呀', plays: '104.3万' },
+      { platform: 'douyin', name: 'Kiwiie', desc: '单眼皮各种妆容思路，烟熏放大双眼', followers: '热门', searchKeyword: 'Kiwiie 单眼皮放大眼妆' },
+      { platform: 'douyin', name: '李砍刀', desc: '刀锋刷画眼线+眼睑下至，单眼皮放大', followers: '30万', searchKeyword: '李砍刀 单眼皮眼线放大' },
+      { platform: 'xhs', name: '飒飒萍', desc: '细长眼放大眼妆，倒置眼妆画法', followers: '热门', searchKeyword: '细长眼放大眼妆' },
+    ],
+    standard_narrow: [
+      { platform: 'bili', bvid: 'BV1BQ4y1974s', title: '内双/偏窄眼日常眼妆思路', author: 'Vivekatt', plays: '182.5万' },
+      { platform: 'douyin', name: '希宝', desc: '偏窄眼型日常眼妆拉长技巧', followers: '热门', searchKeyword: '偏窄眼型日常眼妆' },
+    ],
+    round: [
+      { platform: 'bili', bvid: 'BV1Mr4y197qg', title: '圆眼拉长眼妆一看就会！', author: 'dao刀刀_', plays: '70.9万' },
+      { platform: 'bili', bvid: 'BV1dy4y1n7mR', title: '画过1000双肿泡眼后的消肿4步曲', author: '唐毅TangYi', plays: '68.2万' },
+      { platform: 'douyin', name: '小王嘻嘻', desc: '肿眼泡方圆脸韩妆，圆眼拉长思路', followers: '10万', searchKeyword: '小王嘻嘻 肿眼泡圆眼妆' },
+      { platform: 'douyin', name: '凑凑耶', desc: '肿眼泡内双韩系纯欲妆', followers: '10万', searchKeyword: '凑凑耶 肿眼泡纯欲妆' },
+      { platform: 'xhs', name: '猫抖抖', desc: '圆眼拉长眼线画法，倒置眼妆', followers: '热门', searchKeyword: '圆眼拉长眼妆' },
+    ],
+    standard_round: [
+      { platform: 'bili', bvid: 'BV1M4421S7s3', title: '偏圆眼型日常眼妆10分钟跟练', author: '麦rua贝特', plays: '14.7万' },
+      { platform: 'douyin', name: '小王嘻嘻', desc: '偏圆眼型日常眼妆拉长思路', followers: '10万', searchKeyword: '偏圆眼型日常眼妆' },
+    ],
+    puffy: [
+      { platform: 'bili', bvid: 'BV1dy4y1n7mR', title: '画过1000双肿泡眼后的消肿4步曲', author: '唐毅TangYi', plays: '68.2万' },
+      { platform: 'douyin', name: '凑凑耶', desc: '肿眼泡内双韩系纯欲妆', followers: '10万', searchKeyword: '凑凑耶 肿眼泡纯欲妆' },
+    ],
+    standard: [
+      { platform: 'bili', bvid: 'BV1BQ4y1974s', title: '肿单眼的睫毛大全！拥有桃花眼', author: 'Vivekatt', plays: '182.5万' },
+      { platform: 'bili', bvid: 'BV1M4421S7s3', title: '新手日常淡妆10分钟跟练', author: '麦rua贝特', plays: '14.7万' },
+      { platform: 'douyin', name: '希宝', desc: '标准眼型百搭眼妆思路', followers: '热门', searchKeyword: '希宝 日常百搭眼妆' },
+    ],
+  },
+  nose: {
+    wide: [
+      { platform: 'bili', bvid: 'BV1MW411x71E', title: '鼻子修容拯救塌鼻梁蒜头鼻', author: '唐西西kawkao', plays: '209.4万' },
+      { platform: 'bili', bvid: 'BV1hs4y1Z7Fb', title: '1M2V3爱心修容法！大鼻头必备', author: '易烫YCC', plays: '10.2万' },
+      { platform: 'bili', bvid: 'BV11J411Y7dD', title: '自创式整容级鼻影！塌鼻蒜头猪鼻一网打进', author: '未知UP主', plays: '65万' },
+      { platform: 'douyin', name: '李砍刀', desc: '低山根宽鼻背30s立体捏鼻法！', followers: '30万', searchKeyword: '李砍刀 鼻影修容塌鼻梁' },
+      { platform: 'douyin', name: '周周带你一起妆', desc: '手把手教你修鼻子，画图的那种', followers: '17万', searchKeyword: '周周带你一起妆 鼻影修容蒜头鼻' },
+      { platform: 'douyin', name: '彩妆师麻麻子', desc: '解剖式鼻影修容！专治塌鼻梁宽鼻翼', followers: '热门', searchKeyword: '彩妆师麻麻子 鼻影修容塌鼻梁' },
+    ],
+    standard_wide: [
+      { platform: 'bili', bvid: 'BV1MW411x71E', title: '偏宽鼻日常鼻影修容', author: '唐西西kawkao', plays: '209.4万' },
+      { platform: 'douyin', name: '李砍刀', desc: '偏宽鼻翼30s立体捏鼻法', followers: '30万', searchKeyword: '李砍刀 鼻影修容' },
+    ],
+    narrow: [
+      { platform: 'bili', bvid: 'BV19j411d7wh', title: '全新鼻影思路', author: '茸仔', plays: '93.8万' },
+      { platform: 'douyin', name: '唐飞飞', desc: '窄鼻立体高光教程，提升鼻部精致感', followers: '热门', searchKeyword: '窄鼻立体高光教程' },
+      { platform: 'xhs', name: '化妆师宁宁', desc: '窄鼻高光提亮画法，自然立体不显脏', followers: '热门', searchKeyword: '窄鼻高光自然立体' },
+    ],
+    standard: [
+      { platform: 'bili', bvid: 'BV1c4GX6UEGx', title: '大鼻头不要这样化妆了！', author: 'OUT-OF-OFFICE', plays: '9.2万' },
+      { platform: 'bili', bvid: 'BV19j411d7wh', title: '全新鼻影思路', author: '茸仔', plays: '93.8万' },
+      { platform: 'douyin', name: '程十安', desc: '标准鼻型日常鼻影画法', followers: '百万级', searchKeyword: '程十安 日常鼻影画法' },
+    ],
+  },
+  lip: {
+    thick: [
+      { platform: 'bili', bvid: 'BV1VV4y1x7FM', title: '改善厚嘴唇的方法！来抄作业', author: '邱奥鹿阳Alex', plays: '18.4万' },
+      { platform: 'bili', bvid: 'BV1fa41167EM', title: '零成本4招改善凸嘴厚唇', author: '天才化妆师钦哥', plays: '12.9万' },
+      { platform: 'douyin', name: '程十安', desc: '厚唇改薄画法，自然缩小嘴唇', followers: '百万级', searchKeyword: '程十安 厚唇改薄画法' },
+      { platform: 'xhs', name: '大佬甜er', desc: '厚唇日常口红选色+缩小唇画法', followers: '热门', searchKeyword: '厚唇缩小画法 口红选色' },
+    ],
+    standard_thick: [
+      { platform: 'bili', bvid: 'BV1VV4y1x7FM', title: '偏厚唇日常唇妆修饰思路', author: '邱奥鹿阳Alex', plays: '18.4万' },
+      { platform: 'douyin', name: '程十安', desc: '偏厚唇日常口红选色+唇线画法', followers: '百万级', searchKeyword: '程十安 唇妆画法' },
+    ],
+    thin: [
+      { platform: 'bili', bvid: 'BV1fp4y1R7MU', title: '薄唇有救了！妈生少女微笑唇教程', author: '大佬甜er', plays: '6.5万' },
+      { platform: 'douyin', name: '希宝', desc: '薄唇丰唇嘟嘟唇画法，一分钟变厚', followers: '热门', searchKeyword: '薄唇丰唇嘟嘟唇画法' },
+      { platform: 'xhs', name: '小鱼同学', desc: '薄唇M唇画法，丰唇不夸张', followers: '热门', searchKeyword: '薄唇丰唇M唇画法' },
+    ],
+    standard_thin: [
+      { platform: 'bili', bvid: 'BV1fp4y1R7MU', title: '偏薄唇日常丰唇画法', author: '大佬甜er', plays: '6.5万' },
+      { platform: 'douyin', name: '希宝', desc: '偏薄唇丰唇嘟嘟唇画法', followers: '热门', searchKeyword: '薄唇丰唇画法' },
+    ],
+    standard: [
+      { platform: 'bili', bvid: 'BV1P341127Sg', title: '厚唇薄唇画法一网打尽！', author: '夸张厚', plays: '6.2万' },
+      { platform: 'bili', bvid: 'BV1SL4y1577Y', title: '一分钟深唇变浅唇教程', author: '发财张twiggy-', plays: '6.7万' },
+      { platform: 'douyin', name: '程十安', desc: '标准唇型百搭唇妆思路', followers: '百万级', searchKeyword: '程十安 日常唇妆画法' },
+    ],
+  },
+};
+
+// ====== B站实时搜索 ======
+const PROXY_URL = '/api/bili-search';  // Same origin proxy
+
+async function searchBiliVideos(keyword, order = 'totalrank', maxResults = 6) {
+  try {
+    const url = PROXY_URL + '?keyword=' + encodeURIComponent(keyword) + '&order=' + order;
+    const response = await fetch(url, { timeout: 10000 });
+
+    if (!response.ok) {
+      if (response.status === 429) {
+        console.warn('B站搜索接口限流，使用静态fallback');
+        return { videos: [], fallback: true, reason: '限流' };
+      }
+      throw new Error('搜索请求失败: HTTP ' + response.status);
+    }
+
+    const data = await response.json();
+    if (data.error && data.fallback) {
+      console.warn('B站搜索失败: ' + data.error + '，使用静态fallback');
+      return { videos: [], fallback: true, reason: data.error };
+    }
+
+    const videos = filterBiliMakeup((data.videos || []).slice(0, maxResults).map(v => ({
+      bvid: v.bvid,
+      title: v.title,
+      author: v.author,
+      play: v.play,
+      duration: v.duration,
+      pic: v.pic,
+      tag: v.tag,
+      typename: v.typename,
+      arcurl: v.arcurl,
+      platform: 'bili',
+      realtime: true,
+    })));
+
+    return { videos, fallback: false, total: data.total || 0 };
+  } catch (e) {
+    console.warn('B站实时搜索异常: ' + e.message + '，使用静态fallback');
+    return { videos: [], fallback: true, reason: e.message };
+  }
+}
+
+// 从静态VIDEO_DB中获取B站fallback数据
+function getStaticBiliFallback(part, shape) {
+  const db = VIDEO_DB[part];
+  if (!db) return [];
+  // 精确匹配shape，然后尝试base shape（去掉_后缀），最后standard
+  const entries = db[shape] || db[shape?.split('_')[0]] || db['standard'] || [];
+  return entries.filter(v => v.platform === 'bili').map(v => ({
+    ...v, realtime: false
+  }));
+}
+
+// ====== 组合推荐逻辑 ======
+// 根据多个部位特征组合，生成针对性更强的推荐
+function getComboRecommendations(analysis) {
+  const combos = [];
+  const face = analysis.face.shape;
+  const eye = analysis.eye.shape;
+  const nose = analysis.nose.shape;
+
+  // 方圆脸 + 肿眼泡 → 韩系修容+消肿组合
+  if ((face === 'round' || face === 'square') && eye === 'round') {
+    combos.push({
+      key: 'combo_round_puffy',
+      title: '🎯 方圆脸 + 肿眼泡专属组合',
+      videos: [
+        { platform: 'douyin', name: '凑凑耶', desc: '方圆脸肿眼泡韩系纯欲妆，简单有效', followers: '10万', searchKeyword: '凑凑耶 方圆脸肿眼泡韩系妆' },
+        { platform: 'douyin', name: '小王嘻嘻', desc: '方圆脸肿眼泡韩妆拿捏氛围感', followers: '10万', searchKeyword: '小王嘻嘻 方圆脸肿眼泡韩妆' },
+        { platform: 'bili', bvid: 'BV1dy4y1n7mR', title: '画过1000双肿泡眼消肿4步曲+方圆脸修容', author: '唐毅TangYi', plays: '68.2万' },
+      ]
+    });
+  }
+
+  // 方脸 + 蒜头鼻 → 修容缩骨+鼻影组合
+  if (face === 'square' && nose === 'wide') {
+    combos.push({
+      key: 'combo_square_wide_nose',
+      title: '🎯 方脸 + 蒜头鼻专属组合',
+      videos: [
+        { platform: 'douyin', name: 'CarlaZ', desc: '方脸修容+蒜头鼻鼻影组合打法', followers: '16万', searchKeyword: 'CarlaZ 方脸蒜头鼻修容鼻影' },
+        { platform: 'douyin', name: '李砍刀', desc: '方脸修容+低山根宽鼻背30s捏鼻法', followers: '30万', searchKeyword: '李砍刀 方脸修容鼻影' },
+        { platform: 'bili', bvid: 'BV11J411Y7dD', title: '自创式整容级鼻影+方脸修容思路', author: '未知UP主', plays: '65万' },
+      ]
+    });
+  }
+
+  // 圆脸 + 蒜头鼻 → 圆脸修容+鼻影组合
+  if (face === 'round' && nose === 'wide') {
+    combos.push({
+      key: 'combo_round_wide_nose',
+      title: '🎯 圆脸 + 蒜头鼻专属组合',
+      videos: [
+        { platform: 'douyin', name: '凑凑耶', desc: '圆脸腮红捏骨+蒜头鼻修容思路', followers: '10万', searchKeyword: '凑凑耶 圆脸蒜头鼻修容' },
+        { platform: 'douyin', name: '汤布里布', desc: '圆脸修容+鼻影缩小，整体立体化', followers: '90万', searchKeyword: '汤布里布 圆脸修容鼻影' },
+      ]
+    });
+  }
+
+  // 长脸 + 细长眼 → 缩短中庭+放大眼睛组合
+  if (face === 'long' && eye === 'narrow') {
+    combos.push({
+      key: 'combo_long_narrow_eye',
+      title: '🎯 长脸 + 细长眼专属组合',
+      videos: [
+        { platform: 'xhs', name: '化妆师宁宁', desc: '长脸横向截断修容+细长眼放大眼妆', followers: '热门', searchKeyword: '长脸缩短中庭 细长眼放大眼妆' },
+        { platform: 'douyin', name: 'Kiwiie', desc: '细长眼放大3倍+长脸修容缩短中庭', followers: '热门', searchKeyword: '细长眼放大 长脸修容' },
+      ]
+    });
+  }
+
+  // 心形脸 + 薄唇 → 下巴修饰+丰唇组合
+  if (face === 'heart' && analysis.lip.shape === 'thin') {
+    combos.push({
+      key: 'combo_heart_thin_lip',
+      title: '🎯 心形脸 + 薄唇专属组合',
+      videos: [
+        { platform: 'douyin', name: '不吃白米饭', desc: '心形脸下巴修饰+薄唇丰唇嘟嘟唇', followers: '热门', searchKeyword: '心形脸下巴修饰 薄唇丰唇' },
+        { platform: 'xhs', name: '小鱼同学', desc: '心形脸下巴修饰+薄唇M唇画法', followers: '热门', searchKeyword: '心形脸修容 薄唇M唇' },
+      ]
+    });
+  }
+
+  // 肿眼泡 + 蒜头鼻 → 消肿+鼻影组合（最常见组合之一）
+  if (eye === 'round' && nose === 'wide') {
+    combos.push({
+      key: 'combo_puffy_wide_nose',
+      title: '🎯 肿眼泡 + 蒜头鼻专属组合',
+      videos: [
+        { platform: 'douyin', name: '周周带你一起妆', desc: '肿眼泡画好眼妆+蒜头鼻修鼻影', followers: '17万', searchKeyword: '周周带你一起妆 肿眼泡蒜头鼻' },
+        { platform: 'douyin', name: '橘子猫', desc: '肿眼泡消肿+大鼻头日常修容思路', followers: '热门', searchKeyword: '橘子猫 肿眼泡大鼻头修容' },
+        { platform: 'bili', bvid: 'BV1Mr4y197qg', title: '肿眼泡眼妆+蒜头鼻修容一步搞定', author: 'dao刀刀_', plays: '70.9万' },
+      ]
+    });
+  }
+
+  return combos;
+}
+
+// ====== MediaPipe Face Mesh ======
+// Key landmark indices for 468-point face mesh
+const MP_INDICES = {
+  // Face outline
+  forehead: 10, chin: 152,
+  leftCheek: 234, rightCheek: 454,
+  leftJaw: [234, 93, 132, 58, 172, 136, 150, 149, 176, 148],
+  rightJaw: [454, 323, 361, 288, 397, 365, 379, 378, 400, 377],
+  // Eyes
+  leftEyeOuter: 33, leftEyeInner: 133,
+  leftEyeTop: 159, leftEyeBottom: 145,
+  leftEyeUpperLid: [246, 161, 160, 159, 158, 157, 173],
+  leftEyeLowerLid: [33, 7, 163, 144, 145, 153, 154, 155, 133],
+  rightEyeOuter: 263, rightEyeInner: 362,
+  rightEyeTop: 386, rightEyeBottom: 374,
+  rightEyeUpperLid: [466, 388, 387, 386, 385, 384, 398],
+  rightEyeLowerLid: [263, 249, 390, 373, 374, 380, 381, 382, 362],
+  // Eyebrows
+  leftBrowOuter: 70, leftBrowInner: 107, leftBrowPeak: 52,
+  leftBrowContour: [70, 63, 105, 66, 107, 55, 65, 52, 53, 46],
+  rightBrowOuter: 300, rightBrowInner: 336, rightBrowPeak: 282,
+  rightBrowContour: [300, 293, 334, 296, 336, 285, 295, 282, 283, 276],
+  // Nose
+  noseTip: 4, noseBridge: [168, 6, 197, 195, 5],
+  leftNostril: 102, rightNostril: 331,
+  leftAlar: [129, 198, 217, 209, 131],
+  rightAlar: [358, 429, 437, 420, 360],
+  // Lips
+  mouthLeft: 61, mouthRight: 291,
+  upperLipCenter: 13, lowerLipCenter: 14,
+  upperLipOuter: [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291],
+  lowerLipOuter: [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291],
+  upperLipInner: [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308],
+  lowerLipInner: [78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308],
+};
+
+async function initFaceMesh() {
+  if (faceMeshReady) return faceMeshInitPromise;
+  if (faceMeshInitPromise) return faceMeshInitPromise;
+
+  faceMeshInitPromise = (async () => {
+    setStatus('正在加载 MediaPipe Face Mesh 模型（468点+3D深度），首次约需10-15秒...', 'loading');
+
+    try {
+      faceMeshInstance = new FaceMesh({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${file}`
+      });
+
+      faceMeshInstance.setOptions({
+        maxNumFaces: 1,
+        refineLandmarks: true,
+        staticImageMode: true,
+        minDetectionConfidence: 0.5
+      });
+
+      // Warm up the model
+      await faceMeshInstance.initialize();
+      faceMeshReady = true;
+      setStatus('MediaPipe 模型加载完成，等待上传照片...');
+    } catch (err) {
+      console.error('MediaPipe init failed:', err);
+      faceMeshInstance = null;
+      faceMeshReady = false;
+      faceMeshInitPromise = null;
+      setStatus('MediaPipe 模型加载失败，尝试回退方案...', 'error');
+      // Try fallback with face-api.js
+      await initFaceApiFallback();
+    }
+  })();
+
+  return faceMeshInitPromise;
+}
+
+// ====== Fallback: face-api.js 68-point analysis ======
+let faceApiReady = false;
+let usingFallback = false;
+
+async function initFaceApiFallback() {
+  if (faceApiReady) return;
+  setStatus('正在加载 face-api.js 回退模型（68点，精度稍低但更稳定）...', 'loading');
+  try {
+    // Dynamically load face-api.js
+    if (!window.faceapi) {
+      await loadScript('https://cdn.jsdelivr.net/npm/face-api.js@0.22/dist/face-api.min.js');
+    }
+    await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7/model/');
+    await faceapi.nets.faceLandmark68Net.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7/model/');
+    faceApiReady = true;
+    usingFallback = true;
+    setStatus('face-api.js 回退模型加载完成（68点分析）。等待上传照片...');
+  } catch (err2) {
+    console.error('face-api.js fallback also failed:', err2);
+    setStatus('所有模型加载失败，请刷新页面重试或检查网络连接。', 'error');
+  }
+}
+
+function loadScript(url) {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = url;
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
+
+// ====== 468-point face analysis with 3D depth ======
+function analyzeFace468(landmarks, imgW, imgH) {
+  // Convert normalized landmarks to pixel coordinates + z depth
+  const pts = landmarks.map(lm => ({
+    x: lm.x * imgW,
+    y: lm.y * imgH,
+    z: lm.z  // z is relative depth (not absolute pixels)
+  }));
+
+  const faceWidth = dist(pts[234], pts[454]);  // left cheek to right cheek
+  const faceHeight = dist(pts[10], pts[152]);   // forehead to chin
+
+  return {
+    face: analyzeFaceShape468(pts, faceWidth, faceHeight),
+    brow: analyzeBrow468(pts, faceWidth),
+    eye: analyzeEye468(pts, faceWidth),
+    nose: analyzeNose468(pts, faceWidth),
+    lip: analyzeLip468(pts, faceWidth),
+    faceWidth,
+    faceHeight,
+    ratio: faceHeight / faceWidth
+  };
+}
+
+function analyzeFaceShape468(pts, faceWidth, faceHeight) {
+  const ratio = faceHeight / faceWidth;
+
+  // Jaw angle using chin and jaw points
+  const leftJawMid = pts[132];
+  const rightJawMid = pts[361];
+  const chin = pts[152];
+  const jawAngle = angle3D(leftJawMid, chin, rightJawMid);
+
+  // 3D depth: compare z at nose tip vs forehead
+  const noseDepth = pts[4].z;
+  const foreheadDepth = pts[10].z;
+  const depthDiff = foreheadDepth - noseDepth;
+
+  // Jaw width at midpoint relative to face width
+  const jawMidWidth = dist(pts[132], pts[361]);
+  const jawWidthRatio = jawMidWidth / faceWidth;
+
+  // Forehead width
+  const foreheadWidth = dist(pts[71], pts[301]);
+  const foreheadRatio = foreheadWidth / faceWidth;
+
+  // Cheekbone width
+  const cheekWidth = dist(pts[234], pts[454]);
+  const cheekRatio = cheekWidth / faceHeight;
+
+  let shape, label, depthNote;
+  // 细化分类：5种基本 + 4种过渡型（方圆、长鹅蛋、圆鹅蛋、长方）
+  if (ratio > 1.55) {
+    if (jawAngle > 110) { shape = 'long_square'; label = '偏长方脸'; }
+    else { shape = 'long'; label = '长脸'; }
+  }
+  else if (ratio > 1.35) {
+    if (jawAngle > 115) { shape = 'oval_square'; label = '鹅蛋偏方脸'; }
+    else if (jawAngle < 90) { shape = 'oval_heart'; label = '鹅蛋偏心脸'; }
+    else { shape = 'oval'; label = '鹅蛋脸'; }
+  }
+  else if (ratio < 1.15) {
+    if (jawAngle < 95) { shape = 'heart'; label = '心形脸'; }
+    else { shape = 'round'; label = '圆脸'; }
+  }
+  else {
+    if (jawAngle > 115 && jawWidthRatio > 0.85) { shape = 'square'; label = '方脸'; }
+    else if (jawAngle > 110) { shape = 'round_square'; label = '方圆脸'; }
+    else if (jawAngle < 90) { shape = 'round_heart'; label = '圆心脸'; }
+    else { shape = 'oval'; label = '鹅蛋脸'; }
+  }
+
+  // 3D bone structure assessment
+  if (depthDiff > 0.02) depthNote = '鼻梁立体度偏高（3D检测）';
+  else if (depthDiff < -0.01) depthNote = '鼻梁偏塌（3D检测）';
+  else depthNote = '鼻梁中等立体度（3D检测）';
+
+  // 颧骨判断
+  let cheekNote;
+  if (cheekRatio > 0.95) cheekNote = '颧骨偏宽';
+  else if (cheekRatio < 0.78) cheekNote = '颧骨偏窄';
+  else cheekNote = '颧骨标准';
+
+  return {
+    shape, label,
+    tags: [label, '长宽比 ' + ratio.toFixed(2), '下颌角 ' + Math.round(jawAngle) + '°', depthNote, cheekNote, '下颌宽占比 ' + Math.round(jawWidthRatio * 100) + '%'],
+    icon: '脸',
+    ratio: ratio.toFixed(3),
+    jawAngle: Math.round(jawAngle),
+    jawTransition: jawWidthRatio.toFixed(2),
+    foreheadRatio: Math.round(foreheadRatio * 100) + '%',
+    depthDiff: depthDiff.toFixed(4)
+  };
+}
+
+function analyzeBrow468(pts, faceWidth) {
+  // Full contour analysis for both brows
+  const leftBrow = MP_INDICES.leftBrowContour;
+  const rightBrow = MP_INDICES.rightBrowContour;
+
+  // Peak height relative to brow base line
+  const leftOuter = pts[70], leftInner = pts[107], leftPeak = pts[52];
+  const rightOuter = pts[300], rightInner = pts[336], rightPeak = pts[282];
+
+  // Calculate peak lift (how much the peak rises above the base line)
+  const leftBaseY = (leftOuter.y + leftInner.y) / 2;
+  const rightBaseY = (rightOuter.y + rightInner.y) / 2;
+  const leftPeakLift = leftBaseY - leftPeak.y; // positive = peak rises above base
+  const rightPeakLift = rightBaseY - rightPeak.y;
+  const avgPeakLift = (leftPeakLift + rightPeakLift) / 2;
+
+  // Brow gap (distance between inner points)
+  const browGap = dist(pts[107], pts[336]);
+  const browGapRatio = browGap / faceWidth;
+
+  // Arc curvature: measure how many points deviate from a straight line
+  const leftArcDev = browArcDeviation(pts, leftBrow);
+  const rightArcDev = browArcDeviation(pts, rightBrow);
+  const avgArcDev = (leftArcDev + rightArcDev) / 2;
+
+  let shape, shapeLabel, gapLabel;
+  if (avgPeakLift > faceWidth * 0.03 && avgArcDev > 3) {
+    shape = 'arched'; shapeLabel = '弯拱眉';
+  } else if (avgPeakLift < faceWidth * 0.008 && avgArcDev < 1.5) {
+    shape = 'flat'; shapeLabel = '平直眉';
+  } else {
+    shape = 'normal'; shapeLabel = '标准眉形';
+  }
+
+  if (browGapRatio > 0.06) gapLabel = '眉间距偏宽';
+  else if (browGapRatio < 0.03) gapLabel = '眉间距偏窄';
+  else gapLabel = '眉间距标准';
+
+  return { shape, label: shapeLabel, tags: [shapeLabel, gapLabel, '眉峰抬升 ' + avgPeakLift.toFixed(1) + 'px'], icon: '眉' };
+}
+
+function browArcDeviation(pts, contourIndices) {
+  // Measure how much the contour deviates from a straight line between endpoints
+  const start = pts[contourIndices[0]];
+  const end = pts[contourIndices[contourIndices.length - 1]];
+  let totalDev = 0;
+  for (let i = 1; i < contourIndices.length - 1; i++) {
+    const p = pts[contourIndices[i]];
+    // Distance from point to the line between start and end
+    const lineLen = dist(start, end);
+    if (lineLen < 0.1) continue;
+    const area = Math.abs((end.x - start.x) * (p.y - start.y) - (p.x - start.x) * (end.y - start.y));
+    totalDev += area / lineLen;
+  }
+  return totalDev / (contourIndices.length - 2);
+}
+
+function analyzeEye468(pts, faceWidth) {
+  // Detailed eye analysis using upper/lower eyelid contours
+  const leftOuter = pts[33], leftInner = pts[133];
+  const rightOuter = pts[263], rightInner = pts[362];
+
+  const leftEyeWidth = dist(leftOuter, leftInner);
+  const rightEyeWidth = dist(rightOuter, rightInner);
+  const avgEyeWidth = (leftEyeWidth + rightEyeWidth) / 2;
+
+  // Eye height: max vertical distance in upper/lower eyelid
+  const leftEyeHeight = eyeHeight(pts, MP_INDICES.leftEyeUpperLid, MP_INDICES.leftEyeLowerLid);
+  const rightEyeHeight = eyeHeight(pts, MP_INDICES.rightEyeUpperLid, MP_INDICES.rightEyeLowerLid);
+  const avgEyeHeight = (leftEyeHeight + rightEyeHeight) / 2;
+
+  const whRatio = avgEyeWidth / (avgEyeHeight + 0.5);
+
+  // Eye spacing
+  const eyeGap = dist(pts[133], pts[362]);
+  const eyeGapRatio = eyeGap / avgEyeWidth;
+
+  // Puffy eye detection
+  const upperLidFlatness = eyelidFlatness(pts, MP_INDICES.leftEyeUpperLid);
+  const puffyScore = upperLidFlatness / (avgEyeWidth * 0.01 + 0.1);
+
+  // 细化分类：标准区间再分偏圆/偏窄，并标注肿眼泡
+  let shape, shapeLabel, gapLabel, puffyLabel;
+  if (whRatio > 4.5) { shape = 'narrow'; shapeLabel = '细长眼型'; }
+  else if (whRatio > 3.6) { shape = 'standard_narrow'; shapeLabel = '偏窄标准眼'; }
+  else if (whRatio < 2.5) { shape = 'round'; shapeLabel = '偏圆大眼'; }
+  else if (whRatio < 3.2) { shape = 'standard_round'; shapeLabel = '偏圆标准眼'; }
+  else { shape = 'standard'; shapeLabel = '标准眼型'; }
+
+  // 肿眼泡判断更灵敏
+  if (puffyScore > 6) puffyLabel = '肿眼泡明显';
+  else if (puffyScore > 3) puffyLabel = '轻微肿眼泡';
+  else puffyLabel = '';
+
+  if (eyeGapRatio > 1.3) gapLabel = '眼距偏宽';
+  else if (eyeGapRatio < 0.95) gapLabel = '眼距偏窄';
+  else gapLabel = '眼距标准';
+
+  const tags = [shapeLabel, gapLabel];
+  if (puffyLabel) tags.push(puffyLabel);
+  tags.push('眼宽高比 ' + whRatio.toFixed(2));
+
+  return {
+    shape, label: shapeLabel + (puffyLabel ? '（' + puffyLabel + '）' : ''), tags, icon: '眼',
+    eyeRatio: whRatio.toFixed(2),
+    eyeSpan: eyeGapRatio.toFixed(2),
+    lidFlatness: puffyScore.toFixed(1),
+    interEyeRatio: eyeGapRatio.toFixed(2)
+  };
+}
+
+function eyeHeight(pts, upperIndices, lowerIndices) {
+  // Max vertical distance between upper and lower eyelid
+  let maxDist = 0;
+  for (const ui of upperIndices) {
+    for (const li of lowerIndices) {
+      const d = Math.abs(pts[ui].y - pts[li].y);
+      if (d > maxDist) maxDist = d;
+    }
+  }
+  return maxDist;
+}
+
+function eyelidFlatness(pts, lidIndices) {
+  // How flat the upper eyelid curve is (less curvature = more puffy)
+  if (lidIndices.length < 3) return 0;
+  const ys = lidIndices.map(i => pts[i].y);
+  const xs = lidIndices.map(i => pts[i].x);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const rangeX = Math.max(...xs) - Math.min(...xs);
+  // Flatness = small vertical variation relative to horizontal span
+  return (maxY - minY) / (rangeX + 0.1);
+}
+
+function analyzeNose468(pts, faceWidth) {
+  // Nose width: distance between outer alar points
+  const leftAlarOuter = pts[129];
+  const rightAlarOuter = pts[358];
+  const noseWidth = dist(leftAlarOuter, rightAlarOuter);
+  const noseRatio = noseWidth / faceWidth;
+
+  // 3D nose bridge height
+  const noseBridgeTop = pts[168];
+  const noseTip = pts[4];
+  const bridgeProtrusion = noseBridgeTop.z - noseTip.z;
+
+  // Nose tip roundness
+  const nostrilWidth = dist(pts[102], pts[331]);
+  const tipWidthRatio = nostrilWidth / noseWidth;
+
+  // 细化分类：标准区间再分偏宽/偏窄
+  let shape, label;
+  if (noseRatio > 0.28) { shape = 'wide'; label = '鼻翼偏宽（蒜头鼻倾向）'; }
+  else if (noseRatio > 0.24) { shape = 'standard_wide'; label = '偏宽标准鼻'; }
+  else if (noseRatio < 0.18) { shape = 'narrow'; label = '鼻翼偏窄'; }
+  else if (noseRatio < 0.21) { shape = 'standard_narrow'; label = '偏窄标准鼻'; }
+  else { shape = 'standard'; label = '鼻翼标准'; }
+
+  // 3D assessment
+  let bridgeLabel;
+  if (bridgeProtrusion > 0.01) bridgeLabel = '鼻梁立体（3D检测）';
+  else if (bridgeProtrusion < -0.01) bridgeLabel = '鼻梁偏塌（3D检测）';
+  else bridgeLabel = '鼻梁中等（3D检测）';
+
+  const tags = [label, '鼻翼占比 ' + Math.round(noseRatio * 100) + '%', bridgeLabel];
+  if (tipWidthRatio > 0.6) tags.push('鼻头偏圆润');
+
+  return {
+    shape, label, tags, icon: '鼻',
+    noseWidthRatio: Math.round(noseRatio * 100) + '%',
+    tipRoundness: tipWidthRatio.toFixed(2),
+    bridgeDepth: bridgeProtrusion.toFixed(4),
+    bridge3D: bridgeLabel
+  };
+}
+
+function analyzeLip468(pts, faceWidth) {
+  const lipWidth = dist(pts[61], pts[291]);
+
+  // Lip thickness
+  const upperLipThick = dist(pts[0], pts[13]);
+  const lowerLipThick = dist(pts[17], pts[14]);
+  const totalThick = upperLipThick + lowerLipThick;
+  const thickRatio = totalThick / lipWidth;
+
+  // Upper/lower lip proportion
+  const upperLowerRatio = upperLipThick / (lowerLipThick + 0.5);
+
+  // 细化分类：标准区间再分偏厚/偏薄
+  let shape, label;
+  if (thickRatio > 0.42) { shape = 'thick'; label = '偏厚唇'; }
+  else if (thickRatio > 0.35) { shape = 'standard_thick'; label = '偏厚标准唇'; }
+  else if (thickRatio < 0.26) { shape = 'thin'; label = '偏薄唇'; }
+  else if (thickRatio < 0.30) { shape = 'standard_thin'; label = '偏薄标准唇'; }
+  else { shape = 'standard'; label = '标准唇厚'; }
+
+  const tags = [label, '唇厚占比 ' + Math.round(thickRatio * 100) + '%'];
+  if (upperLowerRatio > 1.3) tags.push('上唇偏厚');
+  else if (upperLowerRatio < 0.7) tags.push('下唇偏厚');
+
+  return {
+    shape, label, tags, icon: '唇',
+    lipRatio: thickRatio.toFixed(2),
+    lipWidthRatio: Math.round((lipWidth / faceWidth) * 100) + '%',
+    cornerHeight: ''
+  };
+}
+
+// Distance and angle helpers
+function dist(a, b) { return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2); }
+function angle3D(a, b, c) {
+  const v1 = { x: a.x - b.x, y: a.y - b.y }, v2 = { x: c.x - b.x, y: c.y - b.y };
+  const dot = v1.x * v2.x + v1.y * v2.y;
+  const m1 = Math.hypot(v1.x, v1.y), m2 = Math.hypot(v2.x, v2.y);
+  const cos = Math.max(-1, Math.min(1, dot / (m1 * m2 + 1e-9)));
+  return Math.acos(cos) * 180 / Math.PI;
+}
+
+// ====== MediaPipe detection & drawing ======
+async function runMediaPipeDetection(imgElement) {
+  await initFaceMesh();
+
+  // If using face-api.js fallback
+  if (usingFallback && faceApiReady) {
+    return runFaceApiDetection(imgElement);
+  }
+
+  if (!faceMeshReady || !faceMeshInstance) {
+    // MediaPipe failed, try fallback
+    if (!faceApiReady) await initFaceApiFallback();
+    if (faceApiReady) {
+      usingFallback = true;
+      return runFaceApiDetection(imgElement);
+    }
+    throw new Error('所有模型加载失败');
+  }
+
+  setStatus('正在用468点+3D深度分析面容...', 'loading');
+
+  return new Promise((resolve, reject) => {
+    faceMeshInstance.onResults((results) => {
+      if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
+        setStatus('未检测到人脸，请换一张正脸照片。', 'error');
+        $('aiEnhanceBox').style.display = 'none';
+        reject(new Error('未检测到人脸'));
+        return;
+      }
+
+      const landmarks = results.multiFaceLandmarks[0];
+      const imgW = imgElement.naturalWidth;
+      const imgH = imgElement.naturalHeight;
+
+      // Draw mesh on canvas
+      drawMesh468(landmarks, imgW, imgH);
+
+      // Analyze
+      mpAnalysisResult = analyzeFace468(landmarks, imgW, imgH);
+      setStatus('MediaPipe 468点分析完成（含3D深度数据）。可点击 AI 增强获取更精准分析。');
+      resolve(mpAnalysisResult);
+    });
+
+    faceMeshInstance.send({ image: imgElement });
+  });
+}
+
+// ====== face-api.js fallback detection ======
+async function runFaceApiDetection(imgElement) {
+  setStatus('正在用68点分析面容（回退模式）...', 'loading');
+
+  const detection = await faceapi.detectSingleFace(imgElement, new faceapi.TinyFaceDetectorOptions())
+    .withFaceLandmarks();
+
+  if (!detection) {
+    setStatus('未检测到人脸，请换一张正脸照片。', 'error');
+    $('aiEnhanceBox').style.display = 'none';
+    throw new Error('未检测到人脸');
+  }
+
+  // Draw landmarks on canvas
+  drawFaceApiMesh(detection, imgElement);
+
+  // Convert 68-point landmarks to analysis format
+  const pts68 = detection.landmarks.positions;
+  const imgW = imgElement.naturalWidth;
+  const imgH = imgElement.naturalHeight;
+
+  mpAnalysisResult = analyzeFace68(pts68, imgW, imgH);
+  setStatus('face-api.js 68点分析完成。精度低于468点方案，建议使用 DeepSeek AI 增强获取更精准结果。');
+  return mpAnalysisResult;
+}
+
+function drawFaceApiMesh(detection, imgElement) {
+  const canvas = $('meshCanvas');
+  const imgW = imgElement.naturalWidth;
+  const imgH = imgElement.naturalHeight;
+  const maxDisplayW = 420, maxDisplayH = 520;
+  const scale = Math.min(maxDisplayW / imgW, maxDisplayH / imgH, 1);
+  const displayW = Math.round(imgW * scale);
+  const displayH = Math.round(imgH * scale);
+  canvas.width = displayW;
+  canvas.height = displayH;
+  const ctx = canvas.getContext('2d');
+
+  // Draw photo
+  const img = window._analysisImg || imgElement;
+  if (img) ctx.drawImage(img, 0, 0, displayW, displayH);
+
+  // Draw 68 landmarks
+  const pts = detection.landmarks.positions;
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  const dotSize = Math.max(1.5, displayW / 300);
+  pts.forEach(p => {
+    const sx = p._x * scale, sy = p._y * scale;
+    ctx.beginPath();
+    ctx.arc(sx, sy, dotSize, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // Draw connections
+  const connections = faceapi.FACE_LANDMARKS_68.connections || [];
+  ctx.strokeStyle = 'rgba(83,74,183,0.6)';
+  ctx.lineWidth = Math.max(1, displayW / 400);
+  connections.forEach(([i, j]) => {
+    ctx.beginPath();
+    ctx.moveTo(pts[i]._x * scale, pts[i]._y * scale);
+    ctx.lineTo(pts[j]._x * scale, pts[j]._y * scale);
+    ctx.stroke();
+  });
+}
+
+// ====== 68-point face analysis (fallback) ======
+function analyzeFace68(pts68, imgW, imgH) {
+  const faceW = dist2d(pts68[0], pts68[16]);
+  const faceH = dist2d(pts68[8], pts68[27]);
+
+  return {
+    face: analyzeFaceShape68(pts68, faceW, faceH),
+    brow: analyzeBrow68(pts68, faceW),
+    eye: analyzeEye68(pts68, faceW),
+    nose: analyzeNose68(pts68, faceW),
+    lip: analyzeLip68(pts68, faceW),
+    faceWidth: faceW,
+    faceHeight: faceH,
+    ratio: faceH / faceW
+  };
+}
+
+function analyzeFaceShape68(pts68, faceW, faceH) {
+  const ratio = faceH / faceW;
+  const jawAngle = anglePts(pts68[3], pts68[8], pts68[13]);
+  let shape, label;
+  if (ratio > 1.5) { shape = 'long'; label = '偏长脸型'; }
+  else if (ratio < 1.2) {
+    if (jawAngle < 95) { shape = 'heart'; label = '心形脸'; }
+    else { shape = 'round'; label = '圆脸'; }
+  } else {
+    if (jawAngle > 115) { shape = 'square'; label = '方脸'; }
+    else { shape = 'oval'; label = '鹅蛋脸'; }
+  }
+  return { shape, label, tags: [label, '长宽比 ' + ratio.toFixed(2), '68点回退模式'], icon: '脸' };
+}
+
+function analyzeBrow68(pts68, faceW) {
+  const leftPeakLift = (pts68[19]._y + pts68[20]._y) / 2 - pts68[17]._y;
+  const rightPeakLift = (pts68[24]._y + pts68[25]._y) / 2 - pts68[26]._y;
+  const avgLift = -(leftPeakLift + rightPeakLift) / 2;
+  const browGap = dist2d(pts68[22], pts68[23]);
+  const gapRatio = browGap / faceW;
+  let shape, shapeLabel, gapLabel;
+  if (avgLift > faceW * 0.03) { shape = 'arched'; shapeLabel = '弯拱眉'; }
+  else if (avgLift < faceW * 0.008) { shape = 'flat'; shapeLabel = '平直眉'; }
+  else { shape = 'normal'; shapeLabel = '标准眉形'; }
+  if (gapRatio > 0.06) gapLabel = '眉间距偏宽';
+  else if (gapRatio < 0.03) gapLabel = '眉间距偏窄';
+  else gapLabel = '眉间距标准';
+  return { shape, label: shapeLabel, tags: [shapeLabel, gapLabel, '68点回退'], icon: '眉' };
+}
+
+function analyzeEye68(pts68, faceW) {
+  const leftW = dist2d(pts68[36], pts68[39]);
+  const rightW = dist2d(pts68[42], pts68[45]);
+  const avgW = (leftW + rightW) / 2;
+  const leftH = Math.abs(pts68[37]._y - pts68[41]._y);
+  const rightH = Math.abs(pts68[43]._y - pts68[47]._y);
+  const avgH = (leftH + rightH) / 2;
+  const whRatio = avgW / (avgH + 0.5);
+  const eyeGap = dist2d(pts68[39], pts68[42]);
+  const gapRatio = eyeGap / avgW;
+  let shape, shapeLabel, gapLabel;
+  if (whRatio > 4.0) { shape = 'narrow'; shapeLabel = '细长眼型'; }
+  else if (whRatio < 3.0) { shape = 'round'; shapeLabel = '偏圆眼型'; }
+  else { shape = 'standard'; shapeLabel = '标准眼型'; }
+  if (gapRatio > 1.3) gapLabel = '眼距偏宽';
+  else if (gapRatio < 0.95) gapLabel = '眼距偏窄';
+  else gapLabel = '眼距标准';
+  return { shape, label: shapeLabel, tags: [shapeLabel, gapLabel, '68点回退'], icon: '眼' };
+}
+
+function analyzeNose68(pts68, faceW) {
+  const noseW = dist2d(pts68[31], pts68[35]);
+  const noseRatio = noseW / faceW;
+  let shape, label;
+  if (noseRatio > 0.28) { shape = 'wide'; label = '鼻翼偏宽（蒜头鼻倾向）'; }
+  else if (noseRatio < 0.20) { shape = 'narrow'; label = '鼻翼偏窄'; }
+  else { shape = 'standard'; label = '鼻翼标准'; }
+  return { shape, label, tags: [label, '鼻翼占比 ' + Math.round(noseRatio * 100) + '%', '68点回退无3D'], icon: '鼻' };
+}
+
+function analyzeLip68(pts68, faceW) {
+  const lipW = dist2d(pts68[48], pts68[54]);
+  const upperH = Math.abs(pts68[51]._y - pts68[62]._y);
+  const lowerH = Math.abs(pts68[66]._y - pts68[57]._y);
+  const totalH = upperH + lowerH;
+  const thickRatio = totalH / lipW;
+  let shape, label;
+  if (thickRatio > 0.42) { shape = 'thick'; label = '偏厚唇'; }
+  else if (thickRatio < 0.26) { shape = 'thin'; label = '偏薄唇'; }
+  else { shape = 'standard'; label = '标准唇厚'; }
+  return { shape, label, tags: [label, '68点回退'], icon: '唇' };
+}
+
+function dist2d(a, b) { return Math.sqrt((a._x - b._x) ** 2 + (a._y - b._y) ** 2); }
+function anglePts(a, b, c) {
+  const v1 = { x: a._x - b._x, y: a._y - b._y }, v2 = { x: c._x - b._x, y: c._y - b._y };
+  const dot = v1.x * v2.x + v1.y * v2.y;
+  const m1 = Math.hypot(v1.x, v1.y), m2 = Math.hypot(v2.x, v2.y);
+  return Math.acos(Math.max(-1, Math.min(1, dot / (m1 * m2 + 1e-9)))) * 180 / Math.PI;
+}
+
+function drawMesh468(landmarks, imgW, imgH) {
+  const canvas = $('meshCanvas');
+  // Scale canvas to reasonable display size while maintaining aspect ratio
+  const maxDisplayW = 420, maxDisplayH = 520;
+  const scale = Math.min(maxDisplayW / imgW, maxDisplayH / imgH, 1);
+  const displayW = Math.round(imgW * scale);
+  const displayH = Math.round(imgH * scale);
+  canvas.width = displayW;
+  canvas.height = displayH;
+  const ctx = canvas.getContext('2d');
+
+  // Draw the photo as background - use window._analysisImg which is set in handleFile
+  const img = window._analysisImg;
+  if (img) {
+    ctx.drawImage(img, 0, 0, displayW, displayH);
+  } else {
+    // Fallback: light gray background if image not available
+    ctx.fillStyle = '#f5f4f0';
+    ctx.fillRect(0, 0, displayW, displayH);
+  }
+
+  // Convert normalized to pixel (scale to display size)
+  const pts = landmarks.map(lm => ({
+    x: lm.x * displayW,
+    y: lm.y * displayH,
+    z: lm.z
+  }));
+
+  const lineWidth = Math.max(1, displayW / 400);
+  const dotSize = Math.max(0.8, displayW / 600);
+
+  // Draw landmark points with slight transparency
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  pts.forEach(p => {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, dotSize, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // Draw colored contour lines with slight transparency for visibility
+  const contourGroups = {
+    'Face Oval': { indices: [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109, 10], color: 'rgba(186,117,23,0.7)' },
+    'Left Brow': { indices: MP_INDICES.leftBrowContour, color: 'rgba(127,119,221,0.8)' },
+    'Right Brow': { indices: MP_INDICES.rightBrowContour, color: 'rgba(127,119,221,0.8)' },
+    'Left Eye Upper': { indices: MP_INDICES.leftEyeUpperLid, color: 'rgba(55,138,221,0.8)' },
+    'Left Eye Lower': { indices: MP_INDICES.leftEyeLowerLid, color: 'rgba(55,138,221,0.8)' },
+    'Right Eye Upper': { indices: MP_INDICES.rightEyeUpperLid, color: 'rgba(55,138,221,0.8)' },
+    'Right Eye Lower': { indices: MP_INDICES.rightEyeLowerLid, color: 'rgba(55,138,221,0.8)' },
+    'Nose Bridge': { indices: [168, 6, 197, 195, 5, 4], color: 'rgba(29,158,117,0.8)' },
+    'Left Alar': { indices: MP_INDICES.leftAlar, color: 'rgba(29,158,117,0.8)' },
+    'Right Alar': { indices: MP_INDICES.rightAlar, color: 'rgba(29,158,117,0.8)' },
+    'Upper Lip Outer': { indices: MP_INDICES.upperLipOuter, color: 'rgba(212,83,126,0.8)' },
+    'Lower Lip Outer': { indices: MP_INDICES.lowerLipOuter, color: 'rgba(212,83,126,0.8)' },
+    'Upper Lip Inner': { indices: MP_INDICES.upperLipInner, color: 'rgba(212,83,126,0.7)' },
+    'Lower Lip Inner': { indices: MP_INDICES.lowerLipInner, color: 'rgba(212,83,126,0.7)' },
+  };
+
+  Object.entries(contourGroups).forEach(([name, group]) => {
+    ctx.strokeStyle = group.color;
+    ctx.lineWidth = lineWidth;
+    ctx.beginPath();
+    group.indices.forEach((idx, k) => {
+      const p = pts[idx];
+      if (k === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    });
+    if (name === 'Face Oval') ctx.closePath();
+    ctx.stroke();
+  });
+}
+
+// ====== DeepSeek AI Enhancement ======
+
+// Compress image for API calls (resize to max side length, convert to JPEG)
+async function compressImageForAPI(dataURI, maxSide) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if (w > maxSide || h > maxSide) {
+        const ratio = Math.min(maxSide / w, maxSide / h);
+        w = Math.round(w * ratio);
+        h = Math.round(h * ratio);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.src = dataURI;
+  });
+}
+
+async function callDeepSeekAnalysis(base64Image) {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error('请先填写 DeepSeek API Key');
+
+  // DeepSeek V4 API 是纯文本模型，不支持图片输入。
+  // 我们把 MediaPipe 468点的精确测量数据发给 DeepSeek，
+  // 让它基于客观数值给出个性化的化妆建议——比看照片更精准。
+
+  const mp = mpAnalysisResult;
+  if (!mp) throw new Error('请先完成本地 MediaPipe 分析再使用 AI 增强');
+
+  // 构造详细的面部测量数据报告
+  const measurementReport = `
+【面容测量数据报告（MediaPipe 468点+3D深度）】
+
+脸型: ${mp.face.label} (${mp.face.shape})
+  - 面部长宽比: ${mp.face.ratio || '未知'}
+  - 下颌角宽度: ${mp.face.jawAngle || '未知'}
+  - 颧骨到下颌过渡: ${mp.face.jawTransition || '未知'}
+  - 额头宽度占比: ${mp.face.foreheadRatio || '未知'}
+
+眉毛: ${mp.brow.label} (${mp.brow.shape})
+  - 眉弓弧度: ${mp.brow.archAngle || '未知'}
+  - 眉峰位置: ${mp.brow.peakPosition || '未知'}
+  - 眉间距: ${mp.brow.interBrowDistance || '未知'}
+  - 眉长占比: ${mp.brow.lengthRatio || '未知'}
+
+眼睛: ${mp.eye.label} (${mp.eye.shape})
+  - 眼型长宽比: ${mp.eye.eyeRatio || '未知'}
+  - 内外眼距: ${mp.eye.eyeSpan || '未知'}
+  - 上眼睑平坦度(肿眼泡指标): ${mp.eye.lidFlatness || '未知'}
+  - 眼距(两眼间距/脸宽): ${mp.eye.interEyeRatio || '未知'}
+
+鼻子: ${mp.nose.label} (${mp.nose.shape})
+  - 鼻翼占比(鼻翼宽/脸宽): ${mp.nose.noseWidthRatio || '未知'}
+  - 鼻尖圆润度: ${mp.nose.tipRoundness || '未知'}
+  - 3D鼻梁深度差(鼻尖vs眉心): ${mp.nose.bridgeDepth || '未知'}
+  - 鼻梁立体度: ${mp.nose.bridge3D || '未知'}
+
+嘴唇: ${mp.lip.label} (${mp.lip.shape})
+  - 上下唇比例: ${mp.lip.lipRatio || '未知'}
+  - 嘴宽占比: ${mp.lip.lipWidthRatio || '未知'}
+  - 嘴角高度: ${mp.lip.cornerHeight || '未知'}
+`;
+
+  const prompt = `你是一位拥有15年经验的专业面部美学分析师和化妆顾问，擅长根据面部几何数据为不同面容特征制定精准的化妆方案。
+
+以下是一份基于468个面部关键点和3D深度扫描的客观测量数据（比肉眼观察更精确）：
+
+${measurementReport}
+
+请根据以上客观数据，从专业化妆角度做出以下分析：
+1. 确认或修正各部位的分类（基于数据是否支持该分类）
+2. 给出针对每个部位特征的精准化妆指导（不是泛泛的建议）
+3. 分析面部整体协调性，给出组合化妆策略
+4. 指出数据中暗示的骨骼结构特征（如颧骨高低、下颌线条、中庭比例等）
+
+请严格按照以下JSON格式返回（只返回纯JSON，不要任何其他内容）：
+
+{
+  "face_shape": "round|square|oval|long|heart",
+  "face_label": "基于数据确认/修正的脸型描述，附化妆对策",
+  "brow_shape": "arched|flat|normal",
+  "brow_label": "基于数据确认/修正的眉形描述，附化妆对策",
+  "eye_shape": "narrow|round|standard",
+  "eye_label": "基于数据确认/修正的眼型描述，附化妆对策",
+  "nose_shape": "wide|narrow|standard",
+  "nose_label": "基于数据确认/修正的鼻型描述，附化妆对策",
+  "lip_shape": "thick|thin|standard",
+  "lip_label": "基于数据确认/修正的唇型描述，附化妆对策",
+  "overall_summary": "整体面容评价+组合化妆策略（2-3句话，要具体）",
+  "makeup_tips": ["5条基于数据的具体化妆建议，每条包含：针对部位+操作方法+效果预期"],
+  "extra_features": ["数据暗示的骨骼/气质特征，3-5个"],
+  "bone_structure": "颧骨高低/下颌线条/中庭比例等骨骼结构判断"
+}`;
+
+  const model = 'deepseek-v4-flash';
+
+  try {
+    const response = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + apiKey
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [{
+          role: 'user',
+          content: prompt
+        }],
+        max_tokens: 1024,
+        temperature: 0.3
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error('DeepSeek API 错误: ' + response.status + ' - ' + errText.substring(0, 200));
+    }
+
+    const data = await response.json();
+    const content = data.choices[0].message.content;
+    let jsonStr = content;
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) jsonStr = jsonMatch[0];
+
+    try {
+      const parsed = JSON.parse(jsonStr);
+      parsed._format_used = 'text+measurement';
+      parsed._model_used = model;
+      parsed._data_driven = true;  // 标记这是基于客观数据的分析
+      return parsed;
+    } catch (e) {
+      return { raw_response: content, parse_error: true, _format_used: 'text+measurement' };
+    }
+  } catch (err) {
+    throw err;
+  }
+}
+
+// ====== Rendering ======
+function getEffectiveAnalysis() {
+  if (currentEngine === 'ai' && aiAnalysisResult) {
+    return {
+      face: { shape: aiAnalysisResult.face_shape, label: aiAnalysisResult.face_label, tags: [aiAnalysisResult.face_label], icon: '脸' },
+      brow: { shape: aiAnalysisResult.brow_shape, label: aiAnalysisResult.brow_label, tags: [aiAnalysisResult.brow_label], icon: '眉' },
+      eye: { shape: aiAnalysisResult.eye_shape, label: aiAnalysisResult.eye_label, tags: [aiAnalysisResult.eye_label], icon: '眼' },
+      nose: { shape: aiAnalysisResult.nose_shape, label: aiAnalysisResult.nose_label, tags: [aiAnalysisResult.nose_label], icon: '鼻' },
+      lip: { shape: aiAnalysisResult.lip_shape, label: aiAnalysisResult.lip_label, tags: [aiAnalysisResult.lip_label], icon: '唇' },
+      ratio: mpAnalysisResult ? mpAnalysisResult.ratio : 1.3
+    };
+  }
+  if (currentEngine === 'merge' && aiAnalysisResult && mpAnalysisResult) {
+    // Merge: use AI labels but include MP data in tags
+    return {
+      face: { shape: aiAnalysisResult.face_shape, label: aiAnalysisResult.face_label,
+              tags: [aiAnalysisResult.face_label, ...(mpAnalysisResult.face.tags.slice(1))], icon: '脸' },
+      brow: { shape: aiAnalysisResult.brow_shape, label: aiAnalysisResult.brow_label,
+              tags: [aiAnalysisResult.brow_label, ...(mpAnalysisResult.brow.tags.slice(1))], icon: '眉' },
+      eye: { shape: aiAnalysisResult.eye_shape, label: aiAnalysisResult.eye_label,
+              tags: [aiAnalysisResult.eye_label, ...(mpAnalysisResult.eye.tags.slice(1))], icon: '眼' },
+      nose: { shape: aiAnalysisResult.nose_shape, label: aiAnalysisResult.nose_label,
+              tags: [aiAnalysisResult.nose_label, ...(mpAnalysisResult.nose.tags.slice(1))], icon: '鼻' },
+      lip: { shape: aiAnalysisResult.lip_shape, label: aiAnalysisResult.lip_label,
+              tags: [aiAnalysisResult.lip_label, ...(mpAnalysisResult.lip.tags.slice(1))], icon: '唇' },
+      ratio: mpAnalysisResult.ratio
+    };
+  }
+  // Default: MediaPipe
+  return mpAnalysisResult;
+}
+
+function renderAll() {
+  const a = getEffectiveAnalysis();
+  if (!a) return;
+
+  const engineLabel = currentEngine === 'mp' ? 'MediaPipe 468点' :
+                      currentEngine === 'ai' ? 'DeepSeek AI' : '融合结果';
+
+  $('overallBox').innerHTML = '<h3>整体脸型诊断（' + engineLabel + '）</h3>' +
+    '<div class="summary">' +
+    (aiAnalysisResult && currentEngine !== 'mp' ? aiAnalysisResult.overall_summary :
+     a.face.label + ' · 长宽比 ' + a.ratio.toFixed(2)) + '</div>';
+
+  // MediaPipe result badge
+  if (mpAnalysisResult) {
+    $('mpResultBox').style.display = '';
+    const engineTag = usingFallback ? '68点回退模式' : '468点精准数据';
+    const engineColor = usingFallback ? '#3c3489' : '#0f6e56';
+    const engineBadgeBg = usingFallback ? 'rgba(83,74,183,0.08)' : 'rgba(15,110,86,0.08)';
+    const engineBadgeBorder = usingFallback ? 'rgba(83,74,183,0.2)' : 'rgba(15,110,86,0.2)';
+    $('mpResultBox').innerHTML = '<div class="mp-result" style="border-color:' + engineColor + '">' +
+      '<div style="position:absolute;top:-10px;left:16px;background:' + engineColor + ';color:#fff;font-size:11px;font-weight:600;padding:3px 10px;border-radius:6px;letter-spacing:0.5px;">' + (usingFallback ? 'face-api.js 68点' : 'MediaPipe 468点') + '</div>' +
+      '<h4 style="font-size:14px;font-weight:600;color:' + engineColor + ';margin-top:4px;">' + engineTag + '</h4>' +
+      '<div style="font-size:13px;color:#5f5e5a;line-height:1.6;">' +
+      '脸长宽比: ' + mpAnalysisResult.ratio.toFixed(2) + ' · ' +
+      '脸宽: ' + Math.round(mpAnalysisResult.faceWidth) + 'px · ' +
+      '脸高: ' + Math.round(mpAnalysisResult.faceHeight) + 'px<br>' +
+      mpAnalysisResult.face.tags.join(' · ') + '<br>' +
+      mpAnalysisResult.nose.tags.join(' · ') +
+      (usingFallback ? '<br><span style="color:#3c3489;font-weight:500;">提示：68点模式无3D深度数据，建议使用 DeepSeek AI 增强获取更精准的面容分析</span>' : '') +
+      '</div></div>';
+  }
+
+  renderVideoResults(a);  // Now async - shows loading first then updates
+  renderComparison();
+}
+
+async function renderVideoResults(a) {
+  const parts = [
+    { key: 'face', cls: 'face', name: '脸型轮廓', data: a.face },
+    { key: 'brow', cls: 'brow', name: '眉毛', data: a.brow },
+    { key: 'eye', cls: 'eye', name: '眼睛', data: a.eye },
+    { key: 'nose', cls: 'nose', name: '鼻子', data: a.nose },
+    { key: 'lip', cls: 'lip', name: '嘴唇', data: a.lip }
+  ];
+
+  // Show loading placeholder first
+  let html = '';
+  parts.forEach(pt => {
+    const kw = getSearchKeyword(pt.key, pt.data);
+    const otherVideos = (VIDEO_DB[pt.key][pt.data.shape] || VIDEO_DB[pt.key]['standard'] || []).filter(v => v.platform !== 'bili');
+
+    html += '<div class="part-section ' + pt.cls + '">';
+    html += '<div class="part-header">' + pt.data.icon + ' ' + pt.name +
+      ' <span style="font-size:13px;color:#888;font-weight:400;">' + pt.data.label + '</span></div>';
+
+    const tagClass = currentEngine === 'mp' ? 'mp-tag' : (currentEngine === 'ai' ? 'ai-tag' : 'tag');
+    const tags = pt.data.tags || [pt.data.label];
+    html += '<div class="traits">' + tags.map(t =>
+      '<span class="tag ' + tagClass + '">' + t + '</span>'
+    ).join('') + '</div>';
+
+    // B站区域：显示loading占位
+    html += '<div id="bili-area-' + pt.key + '" class="bili-area-slot"><div class="search-loading"><span class="spinner"></span>正在从B站实时搜索"' + kw + '"相关视频...</div></div>';
+
+    // 抖音/小红书区域：静态数据立即显示
+    if (otherVideos.length > 0) {
+      html += '<div style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">';
+      otherVideos.forEach(v => {
+        const searchUrl = v.platform === 'douyin'
+          ? 'https://www.douyin.com/search/' + encodeURIComponent(v.searchKeyword)
+          : 'https://www.xiaohongshu.com/search_result?keyword=' + encodeURIComponent(v.searchKeyword);
+        html += '<div class="blogger-card">' +
+          '<div class="blogger-avatar ' + v.platform + '">' + (v.platform === 'douyin' ? '♪' : '✿') + '</div>' +
+          '<div class="blogger-detail"><div class="blogger-name">' + v.name + '</div>' +
+            '<div class="blogger-desc">' + v.desc + '</div>' +
+            '<div class="blogger-followers">' + v.followers + '粉丝</div></div>' +
+          '<button class="blogger-link ' + v.platform + '" data-action="open-link" data-url="' + searchUrl + '">去' + (v.platform === 'douyin' ? '抖音' : '小红书') + '看</button>' +
+        '</div>';
+      });
+      html += '</div>';
+    }
+
+    html += '<a class="more-link" data-action="open-link" data-url="https://search.bilibili.com/all?keyword=' + encodeURIComponent(kw) + '">在B站搜索更多"' + kw + '"视频 →</a>';
+    html += '</div>';
+  });
+
+  // 组合推荐区域（静态数据）
+  const combos = getComboRecommendations(a);
+  if (combos.length > 0) {
+    html += '<div class="combo-section">';
+    html += '<h3 style="font-size:16px;font-weight:700;color:#d4537e;margin-bottom:16px;border-bottom:2px solid #d4537e;padding-bottom:8px;">✨ 为你量身定制的组合推荐</h3>';
+    combos.forEach(combo => {
+      html += '<div class="combo-box" style="background:#fef5f7;border:1px solid #f0d0d8;border-radius:12px;padding:16px;margin-bottom:14px;">';
+      html += '<div style="font-size:14px;font-weight:600;color:#d4537e;margin-bottom:12px;">' + combo.title + '</div>';
+      const comboOther = combo.videos.filter(v => v.platform !== 'bili');
+      if (comboOther.length > 0) {
+        html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">';
+        comboOther.forEach(v => {
+          const searchUrl = v.platform === 'douyin'
+            ? 'https://www.douyin.com/search/' + encodeURIComponent(v.searchKeyword)
+            : 'https://www.xiaohongshu.com/search_result?keyword=' + encodeURIComponent(v.searchKeyword);
+          html += '<div class="blogger-card">' +
+            '<div class="blogger-avatar ' + v.platform + '">' + (v.platform === 'douyin' ? '♪' : '✿') + '</div>' +
+            '<div class="blogger-detail"><div class="blogger-name">' + v.name + '</div>' +
+              '<div class="blogger-desc">' + v.desc + '</div>' +
+              '<div class="blogger-followers">' + v.followers + '粉丝</div></div>' +
+            '<button class="blogger-link ' + v.platform + '" data-action="open-link" data-url="' + searchUrl + '">去' + (v.platform === 'douyin' ? '抖音' : '小红书') + '看</button>' +
+          '</div>';
+        });
+        html += '</div>';
+      }
+      // 组合推荐B站部分也用loading占位
+      html += '<div id="bili-area-combo-' + combos.indexOf(combo) + '"><div class="search-loading"><span class="spinner"></span>正在实时搜索组合推荐视频...</div></div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  $('resultsContent').innerHTML = html;
+
+  // Now fetch B站 search results asynchronously for each part
+  for (const pt of parts) {
+    const kw = getSearchKeyword(pt.key, pt.data);
+    const result = await searchBiliVideos(kw);
+    let biliVideos = result.videos;
+
+    // Fallback to static database if search failed
+    if (result.fallback || biliVideos.length === 0) {
+      biliVideos = getStaticBiliFallback(pt.key, pt.data.shape);
+    }
+
+    const slot = document.getElementById('bili-area-' + pt.key);
+    if (!slot) continue;
+
+    if (biliVideos.length > 0) {
+      const isRealtime = !result.fallback;
+      slot.innerHTML = (isRealtime
+        ? '<div class="realtime-badge"><span class="pulse"></span>B站实时搜索结果 · 共找到' + (result.total || '') + '个相关视频</div>'
+        : '<div class="fallback-badge">静态推荐（实时搜索暂不可用）</div>') +
+        '<div class="video-grid">' +
+        biliVideos.map(v => {
+          const playText = v.realtime ? (v.play >= 10000 ? (v.play / 10000).toFixed(1) + '万' : v.play) : v.plays;
+          const thumbHtml = getThumbHtml(v.pic, 'bili');
+          return '<div class="video-card">' +
+            '<div class="video-thumb bili" data-action="play" data-bvid="' + v.bvid + '" data-title="' + v.title + '" data-author="' + v.author + '">' +
+              thumbHtml +
+              '<span class="platform-badge bili">B站</span>' +
+              (v.pic ? '' : '<span class="thumb-icon bili-icon">▶</span>') +
+              '<span class="play-count">' + playText + '播放</span>' +
+              (v.duration ? '<span style="position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,0.7);color:#fff;font-size:11px;padding:2px 6px;border-radius:4px;z-index:2;">' + v.duration + '</span>' : '') +
+            '</div>' +
+            '<div class="video-info">' +
+              '<div class="video-title">' + v.title + '</div>' +
+              '<div class="video-author">UP主: ' + v.author + '</div>' +
+              (v.typename ? '<div style="font-size:11px;color:#aaa;margin-top:2px;">分区: ' + v.typename + '</div>' : '') +
+              '<div class="video-actions">' +
+                '<button class="btn-play" data-action="play" data-bvid="' + v.bvid + '" data-title="' + v.title + '" data-author="' + v.author + '">直接播放</button>' +
+                '<button class="btn-visit" data-action="open-bili" data-bvid="' + v.bvid + '">去B站看</button>' +
+              '</div>' +
+            '</div></div>';
+        }).join('') +
+        '</div>';
+    } else {
+      slot.innerHTML = '<div style="font-size:13px;color:#888;padding:8px 0;">暂未找到相关B站视频</div>';
+    }
+  }
+
+  // Also fetch combo recommendation B站 videos
+  if (combos.length > 0) {
+    for (let i = 0; i < combos.length; i++) {
+      const combo = combos[i];
+      const comboBili = combo.videos.filter(v => v.platform === 'bili');
+      if (comboBili.length === 0) continue;
+
+      // Use combo keyword to search for more specific combo videos
+      const comboKw = combo.title.replace(/[✨✲★☆]/g, '').trim();
+      let result = { videos: [], fallback: true };
+
+      if (comboKw) {
+        result = await searchBiliVideos(comboKw, 'click', 3);
+      }
+
+      let biliVideos = result.videos;
+      if (result.fallback || biliVideos.length === 0) {
+        biliVideos = comboBili.map(v => ({ ...v, realtime: false }));
+      }
+
+      const slot = document.getElementById('bili-area-combo-' + i);
+      if (!slot) continue;
+
+      slot.innerHTML = '<div class="video-grid">' +
+        biliVideos.map(v => {
+          const playText = v.realtime ? (v.play >= 10000 ? (v.play / 10000).toFixed(1) + '万' : v.play) : v.plays;
+          const thumbHtml = getThumbHtml(v.pic, 'bili');
+          return '<div class="video-card">' +
+            '<div class="video-thumb bili" data-action="play" data-bvid="' + v.bvid + '" data-title="' + v.title + '" data-author="' + v.author + '">' +
+              thumbHtml +
+              '<span class="platform-badge bili">B站</span>' +
+              (v.pic ? '' : '<span class="thumb-icon bili-icon">▶</span>') +
+              '<span class="play-count">' + playText + '播放</span>' +
+            '</div>' +
+            '<div class="video-info">' +
+              '<div class="video-title">' + v.title + '</div>' +
+              '<div class="video-author">UP主: ' + v.author + '</div>' +
+              '<div class="video-actions">' +
+                '<button class="btn-play" data-action="play" data-bvid="' + v.bvid + '" data-title="' + v.title + '" data-author="' + v.author + '">直接播放</button>' +
+                '<button class="btn-visit" data-action="open-bili" data-bvid="' + v.bvid + '">去B站看</button>' +
+              '</div>' +
+            '</div></div>';
+        }).join('') +
+        '</div>';
+    }
+  }
+}
+
+function renderComparison() {
+  if (!mpAnalysisResult || !aiAnalysisResult) {
+    $('comparePanel').style.display = 'none';
+    return;
+  }
+
+  $('comparePanel').style.display = '';
+  const parts = [
+    { name: '脸型', mpShape: mpAnalysisResult.face.shape, mpLabel: mpAnalysisResult.face.label,
+      aiShape: aiAnalysisResult.face_shape, aiLabel: aiAnalysisResult.face_label },
+    { name: '眉毛', mpShape: mpAnalysisResult.brow.shape, mpLabel: mpAnalysisResult.brow.label,
+      aiShape: aiAnalysisResult.brow_shape, aiLabel: aiAnalysisResult.brow_label },
+    { name: '眼睛', mpShape: mpAnalysisResult.eye.shape, mpLabel: mpAnalysisResult.eye.label,
+      aiShape: aiAnalysisResult.eye_shape, aiLabel: aiAnalysisResult.eye_label },
+    { name: '鼻子', mpShape: mpAnalysisResult.nose.shape, mpLabel: mpAnalysisResult.nose.label,
+      aiShape: aiAnalysisResult.nose_shape, aiLabel: aiAnalysisResult.nose_label },
+    { name: '嘴唇', mpShape: mpAnalysisResult.lip.shape, mpLabel: mpAnalysisResult.lip.label,
+      aiShape: aiAnalysisResult.lip_shape, aiLabel: aiAnalysisResult.lip_label },
+  ];
+
+  let html = '<div class="compare-panel"><h3>双引擎对比</h3>';
+  parts.forEach(p => {
+    const match = p.mpShape === p.aiShape;
+    html += '<div class="compare-row">' +
+      '<span class="compare-part">' + p.name + '</span>' +
+      '<span class="compare-mp">' + p.mpLabel + '</span>' +
+      '<span class="compare-ai">' + p.aiLabel + '</span>' +
+      '<span class="' + (match ? 'compare-match' : 'compare-diff') + '">' + (match ? '一致' : '不同') + '</span>' +
+    '</div>';
+  });
+  html += '</div>';
+  $('comparePanel').innerHTML = html;
+}
+
+function getSearchKeyword(part, data) {
+  // 先尝试精确匹配shape，再尝试去掉后缀的base shape，最后用标签里的描述性关键词
+  const kwMap = {
+    face: {
+      round: '圆脸修容化妆教程', round_square: '方圆脸修容化妆教程', round_heart: '圆心脸修容化妆教程',
+      square: '方脸修容化妆教程', oval_square: '鹅蛋偏方脸修容化妆教程',
+      oval: '鹅蛋脸修容化妆教程', oval_heart: '鹅蛋偏心脸修容化妆教程',
+      long: '长脸修容缩短中庭化妆', long_square: '偏长方脸修容化妆教程',
+      heart: '心形脸修容化妆教程',
+      // 旧兼容
+      standard: '鹅蛋脸修容化妆教程',
+    },
+    brow: {
+      arched: '弯拱眉化妆教程', flat: '平直眉化妆教程', normal: '标准眉形化妆教程',
+    },
+    eye: {
+      narrow: '细长眼放大眼妆化妆教程', standard_narrow: '偏窄眼型日常眼妆化妆教程',
+      round: '圆眼肿眼泡眼妆化妆教程', standard_round: '偏圆眼型日常眼妆化妆教程',
+      standard: '日常眼妆新手化妆教程',
+      // 肿眼泡补充关键词
+      puffy: '肿眼泡消肿眼妆化妆教程',
+    },
+    nose: {
+      wide: '宽鼻翼蒜头鼻修容化妆教程', standard_wide: '偏宽鼻翼日常鼻影化妆教程',
+      narrow: '窄鼻立体高光化妆教程', standard_narrow: '偏窄鼻日常鼻影化妆教程',
+      standard: '日常鼻影修容化妆教程',
+    },
+    lip: {
+      thick: '厚唇改薄唇妆化妆教程', standard_thick: '偏厚唇日常唇妆化妆教程',
+      thin: '薄唇丰唇画法化妆教程', standard_thin: '偏薄唇日常唇妆化妆教程',
+      standard: '日常唇妆修饰化妆教程',
+    },
+  };
+
+  // 优先精确匹配shape
+  let kw = (kwMap[part] && kwMap[part][data.shape]);
+  // 回退到base shape（去掉_后缀）
+  if (!kw && data.shape && data.shape.includes('_')) {
+    const base = data.shape.split('_')[0];
+    kw = kwMap[part]?.[base];
+  }
+  // 最终回退
+  if (!kw) kw = kwMap[part]?.standard || '化妆教程';
+
+  // 如果标签里有肿眼泡关键词，追加搜索词
+  if (part === 'eye' && data.tags && data.tags.some(t => t.includes('肿眼泡'))) {
+    kw = '肿眼泡消肿眼妆化妆教程';
+  }
+
+  return kw;
+}
+
+// 过滤掉绘画、板绘、画画教程等非美妆内容
+function normalizePicUrl(pic) {
+  if (!pic) return '';
+  // 代理B站封面图，避免外部域名被安全策略阻止
+  const fullUrl = pic.replace(/^http:\/\//, 'https://').replace(/^\/\//, 'https://');
+  return '/api/thumb?url=' + encodeURIComponent(fullUrl);
+}
+
+function getThumbHtml(pic, platform) {
+  const url = normalizePicUrl(pic);
+  if (!url) return '<span class="thumb-icon ' + platform + '-icon">▶</span>';
+  return '<img src="' + url + '" class="video-thumb-img" onerror="this.style.display=\'none\';this.parentElement.classList.add(\'img-error\');" alt="">';
+}
+
+// 过滤掉绘画、板绘、画画教程等非美妆内容
+function filterBiliMakeup(videos) {
+  if (!videos || !Array.isArray(videos)) return [];
+  const blocked = ['绘画', '板绘', '画画', 'Procreate', '插画', 'procreate', '速写', '素描', '水彩', '油画', '手绘', '美术', 'ipad绘画', '绘画学习', '画画教程'];
+  return videos.filter(v => {
+    const text = (v.title || '') + ' ' + (v.tag || '') + ' ' + (v.typename || '') + ' ' + (v.description || '');
+    return !blocked.some(b => text.includes(b));
+  });
+}
+
+// ====== Video modal ======
+function playBiliVideo(bvid, title, author) {
+  $('modalTitle').textContent = '正在播放: ' + title;
+  $('modalVideoTitle').textContent = title;
+  $('modalVideoAuthor').textContent = 'UP主: ' + author;
+  const iframe = $('modalPlayer');
+  const fallback = $('iframeFallback');
+  iframe.style.display = 'block'; fallback.style.display = 'none';
+  $('fallbackLink').href = 'https://www.bilibili.com/video/' + bvid;
+  $('fallbackLink').setAttribute('data-action', 'open-bili');
+  $('fallbackLink').setAttribute('data-bvid', bvid);
+  iframe.src = 'https://player.bilibili.com/player.html?bvid=' + bvid + '&autoplay=0&high_quality=1&danmaku=0';
+  const loadTimeout = setTimeout(() => { iframe.style.display = 'none'; fallback.style.display = 'block'; }, 5000);
+  iframe.onload = () => clearTimeout(loadTimeout);
+  iframe.onerror = () => { clearTimeout(loadTimeout); iframe.style.display = 'none'; fallback.style.display = 'block'; };
+  $('videoModal').classList.add('active');
+}
+
+function closeModal() {
+  $('videoModal').classList.remove('active');
+  $('modalPlayer').src = '';
+  $('modalPlayer').style.display = 'block';
+  $('iframeFallback').style.display = 'none';
+}
+
+// ====== File handling ======
+function handleFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = async e => {
+    currentImageBase64 = e.target.result;
+
+    // Create temporary image for MediaPipe
+    const img = new Image();
+    img.src = e.target.result;
+    await new Promise(resolve => {
+      if (img.complete && img.naturalWidth > 0) resolve();
+      else img.onload = resolve;
+    });
+    await img.decode();
+
+    // Store reference for drawing
+    window._analysisImg = img;
+
+    $('uploadZone').style.display = 'none';
+    $('previewArea').classList.add('active');
+    $('results').classList.remove('active');
+    aiAnalysisResult = null;
+    updateEnhanceButton();
+
+    try {
+      await runMediaPipeDetection(img);
+      renderAll();
+      $('results').classList.add('active');
+      $('aiEnhanceBox').style.display = '';
+      $('aiResultBox').style.display = 'none';
+      $('aiResultBox').innerHTML = '';
+      $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function reset() {
+  $('uploadZone').style.display = '';
+  $('previewArea').classList.remove('active');
+  $('results').classList.remove('active');
+  $('fileInput').value = '';
+  $('status').textContent = '';
+  $('aiEnhanceBox').style.display = 'none';
+  $('aiResultBox').style.display = 'none';
+  $('aiResultBox').innerHTML = '';
+  $('mpResultBox').style.display = 'none';
+  $('comparePanel').style.display = 'none';
+  aiAnalysisResult = null;
+  mpAnalysisResult = null;
+  currentImageBase64 = '';
+  window._analysisImg = null;
+  currentEngine = 'mp';
+  updateEngineTabs();
+  updateEnhanceButton();
+  const canvas = $('meshCanvas');
+  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function updateEngineTabs() {
+  const tabs = document.querySelectorAll('.engine-tab');
+  tabs.forEach(tab => {
+    const engine = tab.getAttribute('data-engine');
+    tab.className = 'engine-tab';
+    if (engine === currentEngine) {
+      tab.classList.add(engine === 'mp' ? 'active-mp' : engine === 'ai' ? 'active-ai' : 'active-merge');
+    }
+    // Disable AI and merge tabs if no AI result
+    if (engine === 'ai' && !aiAnalysisResult) {
+      tab.style.opacity = '0.4';
+      tab.style.pointerEvents = 'none';
+    } else if (engine === 'merge' && (!aiAnalysisResult || !mpAnalysisResult)) {
+      tab.style.opacity = '0.4';
+      tab.style.pointerEvents = 'none';
+    } else {
+      tab.style.opacity = '1';
+      tab.style.pointerEvents = 'auto';
+    }
+  });
+}
+
+// ====== AI Enhancement ======
+async function runAIEnhancement() {
+  const btn = $('aiEnhanceBtn');
+  if (!currentImageBase64) { alert('请先上传照片并完成本地分析'); return; }
+  const apiKey = getApiKey();
+  if (!apiKey) { alert('请先在顶部填写 DeepSeek API Key 并保存'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '正在调用 DeepSeek AI 分析...';
+  btn.classList.add('loading');
+  $('aiCostInfo').textContent = '';
+
+  try {
+    const result = await callDeepSeekAnalysis(currentImageBase64);
+
+    if (result.parse_error) {
+      $('aiResultBox').style.display = '';
+      $('aiResultBox').innerHTML = '<div class="ai-result"><h4>DeepSeek AI 增强分析</h4>' +
+        '<div class="ai-summary" style="white-space:pre-wrap;">' + result.raw_response + '</div>' +
+        '<div class="ai-cost">AI 返回了非结构化文本，无法自动更新推荐。</div></div>';
+      btn.textContent = 'AI 分析完成（非结构化结果）';
+      return;
+    }
+
+    aiAnalysisResult = result;
+
+    // Build AI result display
+    $('aiResultBox').style.display = '';
+    $('aiResultBox').innerHTML = '<div class="ai-result">' +
+      '<h4>AI 增强面容诊断</h4>' +
+      '<div class="ai-summary">' + result.overall_summary + '</div>' +
+      '<div class="ai-tags">' +
+        '<span class="ai-tag">脸型: ' + result.face_label + '</span>' +
+        '<span class="ai-tag">眉毛: ' + result.brow_label + '</span>' +
+        '<span class="ai-tag">眼睛: ' + result.eye_label + '</span>' +
+        '<span class="ai-tag">鼻子: ' + result.nose_label + '</span>' +
+        '<span class="ai-tag">嘴唇: ' + result.lip_label + '</span>' +
+      '</div>' +
+      (result.extra_features && result.extra_features.length > 0 ?
+        '<div class="ai-tags" style="margin-top:6px;">' + result.extra_features.map(f => '<span class="ai-tag">' + f + '</span>').join('') + '</div>' : '') +
+      '<div class="ai-tips" style="margin-top:10px;"><strong>化妆建议：</strong><br>' +
+        (Array.isArray(result.makeup_tips) ? result.makeup_tips.map(t => '· ' + t).join('<br>') : result.makeup_tips) +
+      '</div>' +
+      '<div class="ai-cost">分析完成 · DeepSeek V4 Flash · 基于468点测量数据 · 每次约0.01元</div>' +
+    '</div>';
+
+    btn.textContent = 'AI 分析已完成';
+    btn.classList.remove('loading');
+    updateEnhanceButton();
+    updateEngineTabs();
+
+    // Auto-switch to merge view
+    currentEngine = 'merge';
+    updateEngineTabs();
+    renderAll();
+
+  } catch (err) {
+    console.error(err);
+    btn.disabled = false;
+    btn.textContent = '启动 AI 增强分析';
+    btn.classList.remove('loading');
+    $('aiCostInfo').textContent = '错误: ' + err.message;
+    $('aiCostInfo').style.color = '#a32d2d';
+  }
+}
+
+// ====== Event delegation ======
+document.addEventListener('click', function(e) {
+  const target = e.target.closest('[data-action]');
+  if (!target) return;
+  const action = target.getAttribute('data-action');
+
+  if (action === 'play') {
+    const bvid = target.getAttribute('data-bvid');
+    playBiliVideo(bvid, target.getAttribute('data-title') || '', target.getAttribute('data-author') || '');
+  }
+  else if (action === 'open-bili') {
+    const bvid = target.getAttribute('data-bvid');
+    if (bvid) openLink('https://www.bilibili.com/video/' + bvid);
+  }
+  else if (action === 'open-link') {
+    const url = target.getAttribute('data-url');
+    if (url) openLink(url);
+  }
+  else if (action === 'save-key') {
+    saveApiKey($('apiKeyInput').value.trim());
+  }
+  else if (action === 'toggle-key-visibility') {
+    const input = $('apiKeyInput');
+    input.type = input.type === 'password' ? 'text' : 'password';
+  }
+  else if (action === 'ai-enhance') {
+    runAIEnhancement();
+  }
+  else if (action === 'reset') {
+    reset();
+  }
+  else if (action === 'switch-engine') {
+    const engine = target.getAttribute('data-engine');
+    if (engine === 'ai' && !aiAnalysisResult) return;
+    if (engine === 'merge' && (!aiAnalysisResult || !mpAnalysisResult)) return;
+    currentEngine = engine;
+    updateEngineTabs();
+    renderAll();
+  }
+});
+
+$('modalClose').addEventListener('click', closeModal);
+$('videoModal').addEventListener('click', function(e) { if (e.target === $('videoModal')) closeModal(); });
+
+$('uploadZone').addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); $('fileInput').click(); });
+$('fileInput').addEventListener('change', function(e) { if (e.target.files && e.target.files[0]) handleFile(e.target.files[0]); });
+
+$('uploadZone').addEventListener('dragover', function(e) { e.preventDefault(); $('uploadZone').classList.add('dragover'); });
+$('uploadZone').addEventListener('dragleave', function(e) { e.preventDefault(); $('uploadZone').classList.remove('dragover'); });
+$('uploadZone').addEventListener('drop', function(e) { e.preventDefault(); $('uploadZone').classList.remove('dragover'); if (e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+
+// Initialize model on page load
+initFaceMesh().catch(err => {
+  console.warn('Model init error (will retry on upload):', err);
+});
+</script>
+</body>
+</html>
