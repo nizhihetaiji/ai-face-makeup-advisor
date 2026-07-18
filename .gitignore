@@ -1,0 +1,17 @@
+# 依赖
+node_modules/
+package-lock.json
+package.json
+
+# 系统/编辑器
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+
+# 敏感信息（永远不要提交）
+.env
+.env.local
+*.key
+secrets.txt
